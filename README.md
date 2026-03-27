@@ -8,7 +8,8 @@ Spinner verbs are the action phrases shown while Claude is working (e.g., "Using
 
 | Theme | File | Verbs |
 |-------|------|-------|
-| Movie Quotes | [movie-quotes.json](movie-quotes.json) | 32 |
+| Movie Quotes | [movie-quotes.json](movie-quotes.json) | 36 |
+| Monty Python | [monty-python.json](monty-python.json) | 30 |
 
 ## Usage
 
