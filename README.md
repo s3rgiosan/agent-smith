@@ -11,7 +11,8 @@ Spinner verbs are the action phrases shown while Claude is working (e.g., "Using
 | Movie Quotes | [movie-quotes.json](movie-quotes.json) | 36 |
 | Monty Python | [monty-python.json](monty-python.json) | 30 |
 | Pirate | [pirate.json](pirate.json) | 30 |
-| Portuguese | [portuguese.json](portuguese.json) | 29 |
+| Portuguese | [portuguese.json](portuguese.json) | 39 |
+| Hugo (TV Game) | [hugo.json](hugo.json) | 8 |
 
 ## Usage
 
