@@ -1,0 +1,11 @@
+.claude
+
+# macOS
+.DS_Store
+
+# Editor/OS noise
+*.swp
+*~
+
+# Backups from sed --backup
+*.bak
