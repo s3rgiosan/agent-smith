@@ -8,9 +8,9 @@
 #
 # Example:
 #   ./update_claude_paths.sh \
-#     --old /Users/alice/projects \
-#     --new /Users/alice/work/projects \
-#     --claude /Users/alice/.claude
+#     --old /Users/MrAnderson/projects \
+#     --new /Users/MrAnderson/work/projects \
+#     --claude /Users/MrAnderson/.claude
 #
 # Flags:
 #   --old      The original (source) directory path that was moved
@@ -172,7 +172,7 @@ run_sweep() {
 # ── Claude path encoding ──────────────────────────────────────────────────────
 # Claude stores per-project context under subdirs named by encoding the
 # absolute path: non-alphanumeric chars → '-'. E.g.
-#   /Users/alice/my project → -Users-alice-my-project
+#   /Users/MrAnderson/my project → -Users-MrAnderson-my-project
 encode_path() {
   printf '%s' "$1" | sed 's/[^A-Za-z0-9]/-/g'
 }

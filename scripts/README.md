@@ -10,8 +10,8 @@ Designed for vaults built with [obsidian-wiki](https://github.com/Ar9av/obsidian
 
 ```bash
 ./update_wiki_paths.sh \
-  --old "/Users/alice/Local Sites" \
-  --new /Users/alice/www \
+  --old "/Users/MrAnderson/Local Sites" \
+  --new /Users/MrAnderson/www \
   --vault ~/Obsidian/my-vault
 ```
 
