@@ -137,7 +137,9 @@ if $REMOVE; then
     .lines |= map(map(select(.id != $id)))
   ' "$CONFIG_FILE" > "$TMP_OUT"
 else
-  COMMAND_PATH="bash ${BADGE_SCRIPT}"
+  # Strip trailing ANSI reset so ccstatusline's background/padding isn't
+  # cleared back to the terminal default after the badge's colored text.
+  COMMAND_PATH="bash ${BADGE_SCRIPT} | perl -pe 's/\\e\\[0m\\z//'"
 
   WIDGET_JSON=$(jq -n \
     --arg id "$BADGE_ID" \
