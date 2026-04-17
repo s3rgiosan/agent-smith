@@ -19,7 +19,7 @@
 #     --config /Users/MrAnderson/.config/ccstatusline/settings-work.json
 #
 # Flags:
-#   --claude    Path to the Claude home directory (required)
+#   --claude    Path to the Claude home directory (default: ~/.claude)
 #   --config    Path to ccstatusline settings.json
 #               (default: ~/.config/ccstatusline/settings.json)
 #   --line      Zero-based index of the line to patch (default: 0)
@@ -34,7 +34,7 @@
 set -euo pipefail
 
 # ── Defaults ──────────────────────────────────────────────────────────────────
-CLAUDE_HOME=""
+CLAUDE_HOME="${HOME}/.claude"
 CONFIG_FILE="${HOME}/.config/ccstatusline/settings.json"
 LINE_INDEX=0
 POSITION="prepend"
@@ -81,8 +81,6 @@ done
 
 # ── Validation ────────────────────────────────────────────────────────────────
 command -v jq >/dev/null 2>&1 || error "jq is required but not installed."
-
-[[ -z "$CLAUDE_HOME" ]] && error "--claude <claude_home> is required."
 
 # Expand ~ manually (argv is not shell-expanded)
 CLAUDE_HOME="${CLAUDE_HOME/#\~/$HOME}"

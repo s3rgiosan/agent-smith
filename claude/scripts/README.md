@@ -50,7 +50,7 @@ Flags:
 
 | Flag | Description |
 |------|-------------|
-| `--claude` | Path to the Claude home directory (required) |
+| `--claude` | Path to the Claude home directory (default: `~/.claude`) |
 | `--config` | Path to ccstatusline `settings.json` (default: `~/.config/ccstatusline/settings.json`) |
 | `--line` | Zero-based index of the status line to patch (default: `0`) |
 | `--position` | `prepend` or `append` within the line (default: `prepend`) |
