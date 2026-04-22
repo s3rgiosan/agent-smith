@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# Re-exec under real bash if invoked via sh/dash or bash-in-POSIX-mode
+# (this script uses process substitution, which POSIX sh rejects at parse time).
+if ! (eval ': < <(:)') 2>/dev/null; then
+  exec bash "$0" "$@"
+fi
 # =============================================================================
 # update_claude_paths.sh
 # Updates all path references inside a .claude directory after moving folders.
@@ -38,12 +43,12 @@ RENAMED_DIRS=0
 CLAUDE_ENCODED_SUBDIRS=(projects file-history todos shell-snapshots debug)
 
 # ── Colors ────────────────────────────────────────────────────────────────────
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-BOLD='\033[1m'
-RESET='\033[0m'
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+CYAN=$'\033[0;36m'
+BOLD=$'\033[1m'
+RESET=$'\033[0m'
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 usage() {

@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# Re-exec under real bash if invoked via sh/dash or bash-in-POSIX-mode
+# (this script uses process substitution, which POSIX sh rejects at parse time).
+if ! (eval ': < <(:)') 2>/dev/null; then
+  exec bash "$0" "$@"
+fi
 # =============================================================================
 # update_wiki_paths.sh
 # Rewrites path references inside an Obsidian wiki vault after moving folders.
@@ -36,12 +41,12 @@ NO_TILDE=false
 CHANGED_FILES=0
 
 # ── Colors ────────────────────────────────────────────────────────────────────
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
-BOLD='\033[1m'
-RESET='\033[0m'
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[1;33m'
+CYAN=$'\033[0;36m'
+BOLD=$'\033[1m'
+RESET=$'\033[0m'
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 usage() {
