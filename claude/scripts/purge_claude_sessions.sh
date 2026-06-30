@@ -24,12 +24,17 @@ fi
 #   # Also blow away memory/ and MEMORY.md for every picked project
 #   ./purge_claude_sessions.sh --wipe-memory
 #
+#   # Also strip each picked project's entry from ~/.claude.json
+#   ./purge_claude_sessions.sh --wipe-config
+#
 #   # Preview what would be removed
 #   ./purge_claude_sessions.sh --dry-run
 #
 # Flags:
 #   --claude       Path to the .claude folder (default: $CLAUDE_HOME or ~/.claude).
 #   --wipe-memory  Also delete memory/ and MEMORY.md in selected projects.
+#   --wipe-config  Also remove each project's entry (trust/allowlist/MCP/history)
+#                  from ~/.claude.json. A timestamped backup is written first.
 #   --dry-run      Preview deletions without removing files.
 #   --yes          Skip the final confirmation prompt.
 #   --help         Show this help message.
@@ -40,6 +45,7 @@ set -euo pipefail
 # ── Defaults ──────────────────────────────────────────────────────────────────
 CLAUDE_DIR="${CLAUDE_HOME:-$HOME/.claude}"
 WIPE_MEMORY=false
+WIPE_CONFIG=false
 DRY_RUN=false
 ASSUME_YES=false
 
@@ -86,6 +92,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --claude)       CLAUDE_DIR="$2";    shift 2 ;;
     --wipe-memory)  WIPE_MEMORY=true;   shift ;;
+    --wipe-config)  WIPE_CONFIG=true;   shift ;;
     --dry-run)      DRY_RUN=true;       shift ;;
     --yes|-y)       ASSUME_YES=true;    shift ;;
     --help|-h)      usage ;;
@@ -98,6 +105,13 @@ CLAUDE_DIR="${CLAUDE_DIR%/}"
 [[ -d "$CLAUDE_DIR" ]] || error "Claude directory not found: $CLAUDE_DIR"
 PROJECTS_ROOT="$CLAUDE_DIR/projects"
 [[ -d "$PROJECTS_ROOT" ]] || error "Projects root not found: $PROJECTS_ROOT"
+
+# Config file sibling of the .claude dir (holds per-project trust/allowlist/MCP).
+CFG="${CLAUDE_DIR}.json"
+if $WIPE_CONFIG; then
+  command -v python3 >/dev/null 2>&1 || error "--wipe-config requires python3."
+  [[ -f "$CFG" ]] || warn "Config not found: $CFG — nothing to strip."
+fi
 
 # ── Gather projects ───────────────────────────────────────────────────────────
 PROJECTS=()
@@ -120,6 +134,7 @@ echo ""
 info "Claude dir: ${CLAUDE_DIR}"
 info "Projects  : ${TOTAL}"
 $WIPE_MEMORY && warn "WIPE-MEMORY mode — memory/ and MEMORY.md will also be deleted."
+$WIPE_CONFIG && warn "WIPE-CONFIG mode — project entries in ~/.claude.json will also be removed."
 $DRY_RUN     && warn "DRY-RUN mode — no files will be removed."
 echo ""
 
@@ -341,6 +356,7 @@ fi
 echo -e "${BOLD}── Deletion log ───────────────────────────${RESET}"
 NUKED=0
 TOTAL_ENTRIES=0
+CONFIG_REMOVED=0
 for idx in "${SELECTED_INDEXES[@]}"; do
   dir="${PROJECTS[$idx]}"
   slug=$(basename "$dir")
@@ -403,14 +419,77 @@ for idx in "${SELECTED_INDEXES[@]}"; do
 done
 echo ""
 
+# ── Strip ~/.claude.json entries ──────────────────────────────────────────────
+# Match by encoding each config key the way Claude encodes paths ([^A-Za-z0-9]
+# → '-') and comparing to the selected slug. The reverse (slug → path) is lossy,
+# so we go forward from the real path the config already stores.
+if $WIPE_CONFIG && [[ -f "$CFG" ]]; then
+  echo -e "${BOLD}── Config entries (~/.claude.json) ────────${RESET}"
+
+  slugs=()
+  for idx in "${SELECTED_INDEXES[@]}"; do
+    slugs+=("$(basename "${PROJECTS[$idx]}")")
+  done
+
+  if ! $DRY_RUN; then
+    backup="$CFG.purge-bak.$(date +%s)"
+    cp "$CFG" "$backup"
+    info "Backup written: ${backup}"
+  fi
+
+  dry_arg=0
+  $DRY_RUN && dry_arg=1
+  removed_out=$(python3 - "$dry_arg" "$CFG" "${slugs[@]}" <<'PY'
+import json, re, sys
+
+dry = sys.argv[1] == "1"
+cfg = sys.argv[2]
+slugs = set(sys.argv[3:])
+
+with open(cfg) as fh:
+    data = json.load(fh)
+
+projects = data.get("projects", {})
+to_remove = [k for k in projects if re.sub(r"[^A-Za-z0-9]", "-", k) in slugs]
+
+for k in to_remove:
+    print(k)
+
+if to_remove and not dry:
+    for k in to_remove:
+        del projects[k]
+    with open(cfg, "w") as fh:
+        json.dump(data, fh, indent=2)
+        fh.write("\n")
+PY
+  )
+
+  if [[ -n "$removed_out" ]]; then
+    while IFS= read -r key; do
+      [[ -z "$key" ]] && continue
+      if $DRY_RUN; then
+        printf "  ${YELLOW}[DRY-RUN]${RESET} would remove entry: %s\n" "$key"
+      else
+        printf "  ${RED}✗${RESET} %s\n" "$key"
+      fi
+      CONFIG_REMOVED=$((CONFIG_REMOVED + 1))
+    done <<< "$removed_out"
+  else
+    info "No matching entries in ${CFG}."
+  fi
+  echo ""
+fi
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${BOLD}── Summary ────────────────────────────────${RESET}"
 if $DRY_RUN; then
   echo -e "  Would nuke: ${YELLOW}${#SELECTED_INDEXES[@]}${RESET} project(s), ${YELLOW}${TOTAL_ENTRIES}${RESET} entrie(s)"
+  $WIPE_CONFIG && echo -e "  Config entries to remove: ${YELLOW}${CONFIG_REMOVED}${RESET}"
   info "Re-run without --dry-run to apply."
 else
   echo -e "  Nuked: ${GREEN}${NUKED}${RESET} project(s), ${GREEN}${TOTAL_ENTRIES}${RESET} entrie(s)"
+  $WIPE_CONFIG && echo -e "  Config entries removed: ${GREEN}${CONFIG_REMOVED}${RESET}"
   if $WIPE_MEMORY; then
     success "Done. Memory wiped where present."
   else
