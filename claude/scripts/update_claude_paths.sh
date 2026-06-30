@@ -121,7 +121,7 @@ else
 fi
 
 # ── Escape paths for sed ──────────────────────────────────────────────────────
-# Pattern side: escape \ / . * [ ] ^ $
+# Pattern side (sed BRE): escape \ / . * [ ] ^ $
 escape_pattern() {
   printf '%s' "$1" | sed 's/[][\\/.*^$]/\\&/g'
 }
@@ -129,13 +129,23 @@ escape_pattern() {
 escape_replacement() {
   printf '%s' "$1" | sed 's/[\\/&]/\\&/g'
 }
+# Pattern side (grep ERE): also escape + ? ( ) { } |
+escape_ere() {
+  printf '%s' "$1" | sed 's/[][\\.^$*+?(){}|/]/\\&/g'
+}
+
+# A path ends a segment when the next char is NOT a name char. Anchoring the
+# match to such a boundary (or end-of-line) stops OLD from clobbering siblings
+# that merely share it as a prefix (e.g. /x/proj vs /x/proj-v2).
+SEGMENT_CHARS='A-Za-z0-9._-'
 
 # ── File sweep (usable for abs + tilde passes) ────────────────────────────────
 run_sweep() {
   local old="$1" new="$2" label="$3"
-  local old_esc new_esc
+  local old_esc new_esc old_ere
   old_esc=$(escape_pattern "$old")
   new_esc=$(escape_replacement "$new")
+  old_ere=$(escape_ere "$old")
 
   info "Scanning files (${label}): ${old} → ${new}"
 
@@ -144,10 +154,10 @@ run_sweep() {
     [[ -z "$file" ]] && continue
     [[ -L "$file" ]] && continue
     matched+=("$file")
-  done < <(grep -rlIF \
+  done < <(grep -rlIE \
     --exclude-dir=.git \
     --exclude-dir=node_modules \
-    -- "$old" "$CLAUDE_DIR" 2>/dev/null || true)
+    -- "${old_ere}([^${SEGMENT_CHARS}]|\$)" "$CLAUDE_DIR" 2>/dev/null || true)
 
   local count=${#matched[@]}
   if [[ $count -eq 0 ]]; then
@@ -167,11 +177,41 @@ run_sweep() {
   else
     info "Applying sed to ${count} file(s)..."
     printf '%s\0' "${matched[@]}" \
-      | xargs -0 sed "${SED_INPLACE[@]}" "s/${old_esc}/${new_esc}/g"
+      | xargs -0 sed "${SED_INPLACE[@]}" \
+          -e "s/${old_esc}\\([^${SEGMENT_CHARS}]\\)/${new_esc}\\1/g" \
+          -e "s/${old_esc}\$/${new_esc}/g"
     success "Updated ${count} file(s)."
   fi
 
   CHANGED_FILES=$((CHANGED_FILES + count))
+}
+
+# ── Config file sweep (~/.claude.json) ────────────────────────────────────────
+# Trust/onboarding state lives in ~/.claude.json (a sibling FILE of $CLAUDE_DIR),
+# keyed by absolute project path under "projects". The dir sweep never sees it,
+# so a moved project keeps prompting for trust. Rewrite it directly.
+sweep_config_json() {
+  local old="$1" new="$2" label="$3"
+  local cfg="${CLAUDE_DIR}.json"
+  [[ -f "$cfg" ]] || return 0
+
+  local old_esc new_esc old_ere
+  old_esc=$(escape_pattern "$old")
+  new_esc=$(escape_replacement "$new")
+  old_ere=$(escape_ere "$old")
+
+  grep -qE -- "${old_ere}([^${SEGMENT_CHARS}]|\$)" "$cfg" 2>/dev/null || return 0
+
+  info "Scanning config (${label}): ${cfg}"
+  if $DRY_RUN; then
+    echo -e "  ${YELLOW}[DRY-RUN]${RESET} Would update: ${cfg}"
+  else
+    sed "${SED_INPLACE[@]}" \
+      -e "s/${old_esc}\\([^${SEGMENT_CHARS}]\\)/${new_esc}\\1/g" \
+      -e "s/${old_esc}\$/${new_esc}/g" "$cfg"
+    success "Updated config: ${cfg}"
+  fi
+  CHANGED_FILES=$((CHANGED_FILES + 1))
 }
 
 # ── Claude path encoding ──────────────────────────────────────────────────────
@@ -236,6 +276,7 @@ echo ""
 
 # ── Process files ─────────────────────────────────────────────────────────────
 run_sweep "$OLD_DIR" "$NEW_DIR" "absolute"
+sweep_config_json "$OLD_DIR" "$NEW_DIR" "absolute"
 
 # Tilde pass: rewrite ~/... forms when --old is under $HOME.
 if ! $NO_TILDE && [[ -n "${HOME:-}" && ( "$OLD_DIR" == "$HOME" || "$OLD_DIR" == "$HOME"/* ) ]]; then
@@ -247,6 +288,7 @@ if ! $NO_TILDE && [[ -n "${HOME:-}" && ( "$OLD_DIR" == "$HOME" || "$OLD_DIR" == 
   fi
   echo ""
   run_sweep "$OLD_TILDE" "$NEW_TILDE" "tilde"
+  sweep_config_json "$OLD_TILDE" "$NEW_TILDE" "tilde"
 fi
 
 # ── Summary ───────────────────────────────────────────────────────────────────
