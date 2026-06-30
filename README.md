@@ -24,8 +24,8 @@ Shell scripts for maintaining Claude Code installations.
 
 | Script | Description |
 |--------|-------------|
-| [`update_claude_paths.sh`](claude/scripts/README.md#update_claude_pathssh) | Fixes up a `.claude` directory after moving a project folder — renames encoded project dirs and rewrites path references in file contents. |
-| [`purge_claude_sessions.sh`](claude/scripts/README.md#purge_claude_sessionssh) | Interactively pick one or more projects in a `.claude` instance to wipe (sessions only by default; `--wipe-memory` also nukes `memory/` and `MEMORY.md`). |
+| [`update_claude_paths.sh`](claude/scripts/README.md#update_claude_pathssh) | Fixes up a `.claude` directory after moving a project folder — renames encoded project dirs, rewrites path references in file contents, and updates the project's `~/.claude.json` entry (trust/allowlist/MCP). |
+| [`purge_claude_sessions.sh`](claude/scripts/README.md#purge_claude_sessionssh) | Interactively pick one or more projects in a `.claude` instance to wipe (sessions only by default; `--wipe-memory` also nukes `memory/` and `MEMORY.md`, `--wipe-config` strips the project's `~/.claude.json` entry). |
 | [`add_caveman_badge.sh`](claude/scripts/README.md#add_caveman_badgesh) | Patches a `ccstatusline` config to add (or remove) the caveman Statusline badge widget. |
 
 #### [`claude/spinner-verbs/`](claude/spinner-verbs/README.md)

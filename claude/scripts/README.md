@@ -4,12 +4,13 @@ Shell scripts for maintaining Claude Code installations.
 
 ## `update_claude_paths.sh`
 
-Fixes up a `.claude` directory after you move a project folder. Does two things:
+Fixes up a `.claude` directory after you move a project folder. Does three things:
 
 1. **Renames Claude's encoded project dirs** under `projects/`, `file-history/`, `todos/`, `shell-snapshots/`, `debug/`. Prefix-match cascades to every subproject — one run handles a whole parent-dir move. Merges into existing entries if the target already exists.
 2. **Rewrites path references in file contents** across every text file in `.claude`. Skips binaries and symlinks, ignores `.git/` and `node_modules/`.
+3. **Rewrites `~/.claude.json`** (the sibling file next to the `.claude` dir), which keys per-project trust/allowlist/MCP/history by absolute path. Without this, a moved project re-prompts to trust the folder on next launch.
 
-Works with BSD and GNU `sed`, and any `.claude` location (not just `~/.claude`).
+Path matches are anchored to a path-segment boundary, so moving `/x/proj` won't clobber a sibling like `/x/proj-v2`, while sub-paths still cascade. Works with BSD and GNU `sed`, and any `.claude` location (not just `~/.claude`).
 
 ```bash
 ./update_claude_paths.sh \
@@ -32,7 +33,7 @@ Flags:
 
 ## `purge_claude_sessions.sh`
 
-Interactive TUI project wiper. Lists every project recorded inside a `.claude` instance (with session count, last activity, and a `[memory]` marker when applicable) and lets you pick one or more to nuke. By default the `memory/` directory and `MEMORY.md` inside each picked project are preserved — pass `--wipe-memory` to blow those away too.
+Interactive TUI project wiper. Lists every project recorded inside a `.claude` instance (with session count, last activity, and a `[memory]` marker when applicable) and lets you pick one or more to nuke. By default the `memory/` directory and `MEMORY.md` inside each picked project are preserved — pass `--wipe-memory` to blow those away too. Pass `--wipe-config` to also strip each picked project's entry (trust/allowlist/MCP/history) from `~/.claude.json`, which the session wipe otherwise leaves orphaned.
 
 Keys:
 
@@ -56,6 +57,9 @@ Keys:
 # Also blow away memory/ and MEMORY.md for every picked project
 ./purge_claude_sessions.sh --wipe-memory
 
+# Also strip each picked project's entry from ~/.claude.json
+./purge_claude_sessions.sh --wipe-config
+
 # Preview what would be removed
 ./purge_claude_sessions.sh --dry-run
 ```
@@ -66,6 +70,7 @@ Flags:
 |------|-------------|
 | `--claude` | Path to the `.claude` folder (default: `$CLAUDE_HOME` or `~/.claude`) |
 | `--wipe-memory` | Also delete `memory/` and `MEMORY.md` in selected projects |
+| `--wipe-config` | Also remove each project's entry from `~/.claude.json` (writes a timestamped backup first) |
 | `--dry-run` | Preview deletions without removing files |
 | `--yes` | Skip the final confirmation prompt |
 | `--help` | Show usage |
@@ -75,6 +80,7 @@ Behavior notes:
 - Sessions are detected by UUID-named top-level entries, covering both layouts: flat `<uuid>.jsonl` (+ optional `<uuid>/` sidecar) and nested `<uuid>/subagents/*.jsonl`.
 - Per-project deletion log prints every removed entry; summary reports project count + total entries.
 - Project directory is `rmdir`-ed after a successful wipe (macOS `.DS_Store` is stripped first). When `memory/` or `MEMORY.md` is preserved the directory stays; the script reports what's left.
+- `--wipe-config` matches `~/.claude.json` entries by encoding each config key the way Claude encodes paths (`[^A-Za-z0-9]` → `-`) and comparing to the picked slug; needs `python3`; writes a `~/.claude.json.purge-bak.<epoch>` backup before editing.
 - TUI renders inline (no alternate screen). Terminal state is restored on normal exit, `Ctrl-C`, or `SIGTERM`.
 
 ## `add_caveman_badge.sh`
