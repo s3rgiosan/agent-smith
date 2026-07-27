@@ -2,6 +2,38 @@
 
 Shell scripts for maintaining Claude Code installations.
 
+## `install_claude_commands.sh`
+
+Installs the slash commands from [`../commands/`](../commands/README.md) into a Claude home, so they show up as `/<name>` in every session.
+
+Symlinks by default — edits in the repo take effect immediately, no reinstall. Pass `--copy` for a detached snapshot. Existing files are replaced (use `--backup` to keep a timestamped `.bak`; symlinks are replaced without one). Idempotent.
+
+```bash
+# Install into ~/.claude (or $CLAUDE_CONFIG_DIR)
+./install_claude_commands.sh
+
+# Snapshot copies into a non-default Claude home
+./install_claude_commands.sh --claude /Users/MrAnderson/.claude-work --copy
+
+# Preview, then remove
+./install_claude_commands.sh --uninstall --dry-run
+./install_claude_commands.sh --uninstall
+```
+
+Flags:
+
+| Flag | Description |
+|------|-------------|
+| `--claude` | Path to the Claude home directory (default: `$CLAUDE_CONFIG_DIR` or `~/.claude`) |
+| `--copy` | Copy the files instead of symlinking them |
+| `--backup` | Save a timestamped `.bak` of any regular file being overwritten |
+| `--uninstall` | Remove the commands this repo installs, then exit |
+| `--dry-run` | Print planned actions, write nothing |
+| `--yes` | Skip the confirmation prompt |
+| `--help` | Show usage |
+
+`README.md` in the commands directory is skipped. A new session (or restart) is needed before Claude Code picks up newly installed commands.
+
 ## `update_claude_paths.sh`
 
 Fixes up a `.claude` directory after you move a project folder. Does three things:
