@@ -25,6 +25,7 @@ Custom slash commands for Claude Code.
 | Command | Description |
 |---------|-------------|
 | [`/orchestrate`](claude/commands/README.md#orchestrate) | Runs the turn on Fable as an orchestrator — Fable plans and verifies, while exploration and implementation are delegated to cheaper `sonnet`/`opus`/`haiku` subagents. |
+| [`/cf-settings-report`](claude/commands/README.md#cf-settings-report) | Generates a per-category matrix report of Cloudflare zone settings across every zone on the account, flagging cross-domain deviations with fixes (via the `cloudflare-api` MCP). |
 
 #### [`claude/scripts/`](claude/scripts/README.md)
 

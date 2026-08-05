@@ -19,3 +19,14 @@ The full delegation policy (which model and agent type gets which kind of work) 
 **Model scope caveat:** a slash command's `model:` override applies **for the rest of that turn only** — the next prompt resumes the session model. For a multi-turn orchestration session, run `/model fable` as well, or re-invoke `/orchestrate` each turn. There is no supported way for a command to persist a session model switch.
 
 Inspired by [@fabiankaegy](https://github.com/fabiankaegy)'s own orchestrator slash command.
+
+## `/cf-settings-report`
+
+Generates a markdown report comparing Cloudflare zone settings across **every zone on the account**, grouped by dashboard category (SSL/TLS, Security, Scrape Shield, Speed, Caching, Network, DNS). Each category renders a matrix — rows are domains, columns are the settings that vary — with off-majority cells flagged and a **Deviations & fixes** list (severity + action point) per category.
+
+```
+/cf-settings-report                          # writes cloudflare-zones-matrix.md
+/cf-settings-report reports/cf-audit.md      # custom output path
+```
+
+Reads all data through the **`cloudflare-api`** MCP server (from the `cloudflare` plugin), which must be connected and authenticated. The command embeds a fixed generator that is run **verbatim** through that server's `execute` tool, so the report is deterministic run-to-run rather than re-derived. Because `execute` truncates large results, the generator emits in two passes (toggled by three constants at the top) that the command concatenates into the output file. `disable-model-invocation: true` — it only runs when you type `/cf-settings-report`.
