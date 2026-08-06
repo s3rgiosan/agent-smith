@@ -51,8 +51,8 @@ async () => {
 
   const CATS=[
     ["SSL/TLS",["ssl","ssl_recommender","min_tls_version","tls_1_3","0rtt","opportunistic_encryption","opportunistic_onion","automatic_https_rewrites","always_use_https","security_header","tls_client_auth","ciphers","sha1_support","tls_1_2_only","ech","pq_keyex"]],
-    ["Security",["security_level","challenge_ttl","browser_check","bot_fight_mode","ai_bots_protection","crawler_protection","waf","privacy_pass","advanced_ddos","orange_to_orange"]],
-    ["Scrape Shield",["email_obfuscation","server_side_exclude","hotlink_protection"]],
+    ["Security",["security_level","challenge_ttl","browser_check","bot_fight_mode","ai_bots_protection","crawler_protection","waf","privacy_pass","advanced_ddos","orange_to_orange","email_obfuscation","hotlink_protection"]],
+    ["Scrape Shield",["server_side_exclude"]],
     ["Speed / Optimization",["brotli","rocket_loader","mirage","polish","webp","early_hints","minify","prefetch_preload","replace_insecure_js"]],
     ["Caching",["cache_level","browser_cache_ttl","edge_cache_ttl","development_mode","always_online","sort_query_string_for_cache","origin_error_page_pass_thru"]],
     ["Network",["http2","http3","ipv6","websockets","pseudo_ipv4","ip_geolocation","true_client_ip_header","response_buffering","proxy_read_timeout","max_upload","long_lived_grpc","visitor_ip"]],
