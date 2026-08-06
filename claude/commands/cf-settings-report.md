@@ -70,27 +70,25 @@ async () => {
   if(INCLUDE_HEADER){
     out+=`# Cloudflare Zones — Settings Matrix by Category\n\n`;
     out+=`**Zones:** ${names.length} · **Generated:** ${new Date().toISOString().slice(0,10)}\n\n`;
-    out+=`One section per category. Uniform settings are listed once; the matrix shows only settings that **vary** across domains (rows = domains, columns = settings). **Bold ⚠️** = value differs from the fleet majority for that column. Severity in fixes: 🔴 security risk · 🟠 weaker-than-ideal · ⚪ cosmetic/policy drift.\n\n---\n\n`;
+    out+=`One section per category. The matrix shows **every** setting in the category (rows = domains, columns = settings), so the applied value is visible even when it is uniform across the fleet. **Bold ⚠️** = value differs from the fleet majority for that column. Severity in fixes: 🔴 security risk · 🟠 weaker-than-ideal · ⚪ cosmetic/policy drift.\n\n---\n\n`;
   }
 
   for(const [cat,ids] of CATS){
     if(!EMIT.includes(cat)) continue;
     const present=ids.filter(id=>names.some(n=>id in data[n]));
-    const uni=[], vary=[], maj={};
+    out+=`## ${cat}\n\n`;
+    if(!present.length){out+=`_No settings available in this category._\n\n---\n\n`; continue;}
+    const vary=[], maj={};
     for(const id of present){
       const vals={}; for(const n of names){if(!(id in data[n]))continue;const k=fmt(data[n][id]);vals[k]=(vals[k]||0)+1;}
-      const keys=Object.keys(vals);
-      if(keys.length<=1){uni.push([id,keys[0]??"—"]);}
-      else{vary.push(id); let b=null,bc=0; for(const [k,c] of Object.entries(vals)) if(c>bc){bc=c;b=k;} maj[id]=b;}
+      if(Object.keys(vals).length>1){vary.push(id); let b=null,bc=0; for(const [k,c] of Object.entries(vals)) if(c>bc){bc=c;b=k;} maj[id]=b;}
     }
-    out+=`## ${cat}\n\n`;
-    if(uni.length){out+=`**Uniform across all ${names.length} domains** (no deviation): `+uni.map(([id,v])=>`${label(id)} = \`${String(v).replace(/`/g,"")}\``).join(" · ")+`\n\n`;}
-    if(!vary.length){out+=`_No varying settings in this category — everything is uniform._\n\n---\n\n`; continue;}
-    out+=`| Domain | ${vary.map(label).join(" | ")} |\n|${"---|".repeat(vary.length+1)}\n`;
+    out+=`| Domain | ${present.map(label).join(" | ")} |\n|${"---|".repeat(present.length+1)}\n`;
     for(const n of names){
-      const cells=vary.map(id=>{const v=fmt(data[n][id]);return v===maj[id]?v:`**${v}** ⚠️`;});
+      const cells=present.map(id=>{const v=fmt(data[n][id]); if(!(id in maj))return v; return v===maj[id]?v:`**${v}** ⚠️`;});
       out+=`| ${n} | ${cells.join(" | ")} |\n`;
     }
+    if(!vary.length){out+=`\n_No deviations in this category — every setting is uniform across all ${names.length} domains._\n\n---\n\n`; continue;}
     out+=`\n**Deviations & fixes**\n\n`;
     for(const id of vary){
       const groups={}; for(const n of names){if(!(id in data[n]))continue;const v=fmt(data[n][id]); if(v!==maj[id])(groups[v]=groups[v]||[]).push(n);}
