@@ -61,16 +61,37 @@ async () => {
   ];
   const names=Object.keys(data).sort();
   const fmt=v=>{if(v===null||v===undefined)return "—";if(typeof v==="boolean")return v?"on":"off";if(typeof v==="object")return "`"+JSON.stringify(v)+"`";return String(v);};
+  // Cloudflare dashboard option labels, keyed by setting id → { apiValue: "Dashboard label" }.
+  const VLB={
+    ssl:{off:"Off",flexible:"Flexible",full:"Full",strict:"Full (strict)"},
+    min_tls_version:{"1.0":"TLS 1.0","1.1":"TLS 1.1","1.2":"TLS 1.2","1.3":"TLS 1.3"},
+    tls_1_3:{on:"On",off:"Off",zrt:"On + 0-RTT"},
+    security_level:{off:"Essentially Off",low:"Low",medium:"Medium",high:"High",under_attack:"I'm Under Attack"},
+    cache_level:{aggressive:"Standard",basic:"No query string",simplified:"Ignore query string"},
+    pseudo_ipv4:{off:"Off",add_header:"Add header",overwrite_header:"Overwrite header"},
+    ai_bots_protection:{block:"Block",only_on_ad_pages:"Block on ad pages",disabled:"Off"},
+    crawler_protection:{enabled:"On",disabled:"Off"},
+    cname_flattening:{flatten_at_root:"Flatten at root",flatten_all:"Flatten all CNAMEs"},
+    dnssec:{active:"Active",pending:"Pending","pending-disabled":"Pending disabled",disabled:"Disabled"},
+  };
+  const dur=s=>{const n=+s;const U=[[31536000,"year"],[2592000,"month"],[604800,"week"],[86400,"day"],[3600,"hour"],[60,"minute"],[1,"second"]];for(const [sec,nm] of U){if(n>=sec&&n%sec===0){const k=n/sec;return `${k} ${nm}${k>1?"s":""}`;}}return String(n);};
+  // disp = display string for a cell: dashboard label where the setting has named options, humanized duration for TTLs, else raw fmt.
+  const disp=(id,v)=>{
+    if(id==="browser_cache_ttl"&&(v===0||v==="0"))return "Respect Existing Headers";
+    if((id==="browser_cache_ttl"||id==="edge_cache_ttl"||id==="challenge_ttl")&&/^\d+$/.test(String(v)))return dur(v);
+    const m=VLB[id]; if(m&&String(v) in m)return m[String(v)];
+    return fmt(v);
+  };
   const LB={ssl:"SSL",ssl_recommender:"SSL Recommender",min_tls_version:"Min TLS",tls_1_3:"TLS 1.3","0rtt":"0-RTT",opportunistic_encryption:"Opp. Encryption",opportunistic_onion:"Onion Routing",automatic_https_rewrites:"Auto HTTPS Rewrites",always_use_https:"Always HTTPS",security_header:"HSTS Header",tls_client_auth:"TLS Client Auth",ciphers:"Ciphers",sha1_support:"SHA1",tls_1_2_only:"TLS 1.2 Only",ech:"ECH",pq_keyex:"PQ Keyex",security_level:"Security Level",challenge_ttl:"Challenge TTL",browser_check:"Browser Check",bot_fight_mode:"Bot Fight Mode",ai_bots_protection:"Block AI Bots",crawler_protection:"AI Labyrinth",waf:"WAF",privacy_pass:"Privacy Pass",advanced_ddos:"Advanced DDoS",orange_to_orange:"O2O",email_obfuscation:"Email Obfuscation",server_side_exclude:"Server Side Exclude",hotlink_protection:"Hotlink Protection",brotli:"Brotli",rocket_loader:"Rocket Loader",mirage:"Mirage",polish:"Polish",webp:"WebP",early_hints:"Early Hints",minify:"Minify",prefetch_preload:"Prefetch Preload",replace_insecure_js:"Replace Insecure JS",cache_level:"Cache Level",browser_cache_ttl:"Browser Cache TTL",edge_cache_ttl:"Edge Cache TTL",development_mode:"Dev Mode",always_online:"Always Online",sort_query_string_for_cache:"Sort QS Cache",origin_error_page_pass_thru:"Origin Error Passthru",http2:"HTTP/2",http3:"HTTP/3",ipv6:"IPv6",websockets:"WebSockets",pseudo_ipv4:"Pseudo IPv4",ip_geolocation:"IP Geolocation",true_client_ip_header:"True-Client-IP",response_buffering:"Response Buffering",proxy_read_timeout:"Proxy Read Timeout",max_upload:"Max Upload",long_lived_grpc:"gRPC",visitor_ip:"Visitor IP",dnssec:"DNSSEC",cname_flattening:"CNAME Flattening",log_to_cloudflare:"Log to CF",filter_logs_to_cloudflare:"Filter Logs",mobile_redirect:"Mobile Redirect"};
   const label=id=>LB[id]||id;
   const ADVICE={ssl:"Set to `strict` (Full Strict) fleet-wide. `flexible` = unencrypted CF↔origin. `full` skips cert validation.",always_use_https:"Turn `on` to force HTTPS on every request.",tls_1_3:"Enable TLS 1.3 with 0-RTT (`zrt`) for consistency.","0rtt":"Enable 0-RTT (turns on with TLS 1.3 `zrt`).",tls_client_auth:"Align across fleet; cosmetic on Free.",challenge_ttl:"Standardize the Challenge TTL.",bot_fight_mode:"Set a fleet policy.",ai_bots_protection:"Standardize AI-crawler blocking: `block` (all pages), `only_on_ad_pages`, or `disabled`.",crawler_protection:"Enable AI Labyrinth (`enabled`) fleet-wide to trap unauthorized AI crawlers.",hotlink_protection:"Standardize hotlink protection.",cache_level:"Standardize the cache level.",browser_cache_ttl:"Standardize; a non-zero value overrides origin cache headers with an edge-side browser TTL.",pseudo_ipv4:"Standardize Pseudo IPv4."};
-  const sevFor=(id,v)=>{ if(id==="ssl"&&v==="flexible")return "🔴"; if(id==="ssl"&&v==="full")return "🟠"; if(id==="always_use_https"&&v==="off")return "🔴"; return "⚪"; };
+  const sevFor=(id,v)=>{ if(id==="ssl"&&v==="Flexible")return "🔴"; if(id==="ssl"&&v==="Full")return "🟠"; if(id==="always_use_https"&&v==="off")return "🔴"; return "⚪"; };
 
   let out="";
   if(INCLUDE_HEADER){
     out+=`# Cloudflare Zones — Settings Matrix by Category\n\n`;
     out+=`**Zones:** ${names.length} · **Generated:** ${new Date().toISOString().slice(0,10)}\n\n`;
-    out+=`One section per category. The matrix shows **every** setting in the category (rows = domains, columns = settings), so the applied value is visible even when it is uniform across the fleet. **Bold ⚠️** = value differs from the fleet majority for that column. Severity in fixes: 🔴 security risk · 🟠 weaker-than-ideal · ⚪ cosmetic/policy drift.\n\n---\n\n`;
+    out+=`One section per category. The matrix shows **every** setting in the category (rows = domains, columns = settings), so the applied value is visible even when it is uniform across the fleet. Values render using their **Cloudflare dashboard labels** (e.g. cache level \`aggressive\` shows as \`Standard\`, browser cache TTL \`0\` as \`Respect Existing Headers\`); TTLs are shown as durations. **Bold ⚠️** = value differs from the fleet majority for that column. Severity in fixes: 🔴 security risk · 🟠 weaker-than-ideal · ⚪ cosmetic/policy drift.\n\n---\n\n`;
   }
 
   for(const [cat,ids] of CATS){
@@ -80,18 +101,18 @@ async () => {
     if(!present.length){out+=`_No settings available in this category._\n\n---\n\n`; continue;}
     const vary=[], maj={};
     for(const id of present){
-      const vals={}; for(const n of names){if(!(id in data[n]))continue;const k=fmt(data[n][id]);vals[k]=(vals[k]||0)+1;}
+      const vals={}; for(const n of names){if(!(id in data[n]))continue;const k=disp(id,data[n][id]);vals[k]=(vals[k]||0)+1;}
       if(Object.keys(vals).length>1){vary.push(id); let b=null,bc=0; for(const [k,c] of Object.entries(vals)) if(c>bc){bc=c;b=k;} maj[id]=b;}
     }
     out+=`| Domain | ${present.map(label).join(" | ")} |\n|${"---|".repeat(present.length+1)}\n`;
     for(const n of names){
-      const cells=present.map(id=>{const v=fmt(data[n][id]); if(!(id in maj))return v; return v===maj[id]?v:`**${v}** ⚠️`;});
+      const cells=present.map(id=>{const v=disp(id,data[n][id]); if(!(id in maj))return v; return v===maj[id]?v:`**${v}** ⚠️`;});
       out+=`| ${n} | ${cells.join(" | ")} |\n`;
     }
     if(!vary.length){out+=`\n_No deviations in this category — every setting is uniform across all ${names.length} domains._\n\n---\n\n`; continue;}
     out+=`\n**Deviations & fixes**\n\n`;
     for(const id of vary){
-      const groups={}; for(const n of names){if(!(id in data[n]))continue;const v=fmt(data[n][id]); if(v!==maj[id])(groups[v]=groups[v]||[]).push(n);}
+      const groups={}; for(const n of names){if(!(id in data[n]))continue;const v=disp(id,data[n][id]); if(v!==maj[id])(groups[v]=groups[v]||[]).push(n);}
       out+=`- **${label(id)}** — majority \`${maj[id]}\`. ${ADVICE[id]||"Align to majority."}\n`;
       for(const [v,doms] of Object.entries(groups)) out+=`  - ${sevFor(id,v)} \`${v}\` → ${doms.join(", ")}\n`;
     }
