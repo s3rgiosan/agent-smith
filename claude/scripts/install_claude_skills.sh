@@ -4,33 +4,36 @@ if [ -z "${BASH_VERSION:-}" ]; then
   exec bash "$0" "$@"
 fi
 # =============================================================================
-# install_claude_commands.sh
-# Installs the slash commands from this repo's claude/commands/ into a Claude
-# Code home, so they show up as /<name> in every session.
+# install_claude_skills.sh
+# Installs the skills from this repo's claude/skills/ into a Claude Code home,
+# so they show up as skills in every session.
+#
+# A skill is a directory containing a SKILL.md file. Each such directory is
+# installed as $CLAUDE_HOME/skills/<name>.
 #
 # Symlinks by default (edits in the repo take effect immediately). Use --copy
 # for a detached snapshot.
 #
-# Pass one or more command names to install just those; with no names, all
-# shipped commands are installed.
+# Pass one or more skill names to install just those; with no names, all
+# shipped skills are installed.
 #
 # Usage:
-#   ./install_claude_commands.sh [NAME...] [--claude <claude_home>] [--copy]
-#                                [--backup] [--uninstall]
-#                                [--dry-run] [--yes] [--help]
+#   ./install_claude_skills.sh [NAME...] [--claude <claude_home>] [--copy]
+#                              [--backup] [--uninstall]
+#                              [--dry-run] [--yes] [--help]
 #
 # Example:
-#   ./install_claude_commands.sh
-#   ./install_claude_commands.sh orchestrate cf-settings-report
-#   ./install_claude_commands.sh --claude /Users/MrAnderson/.claude-work --copy
-#   ./install_claude_commands.sh orchestrate --uninstall --dry-run
+#   ./install_claude_skills.sh
+#   ./install_claude_skills.sh grill-me
+#   ./install_claude_skills.sh --claude /Users/MrAnderson/.claude-work --copy
+#   ./install_claude_skills.sh grill-me --uninstall --dry-run
 #
 # Flags:
 #   --claude    Path to the Claude home directory (default: $CLAUDE_CONFIG_DIR
 #               or ~/.claude)
-#   --copy      Copy the files instead of symlinking them
-#   --backup    Save a timestamped .bak of any file being overwritten
-#   --uninstall Remove the commands this repo installs, then exit
+#   --copy      Copy the directories instead of symlinking them
+#   --backup    Save a timestamped .bak of any directory being overwritten
+#   --uninstall Remove the skills this repo installs, then exit
 #   --dry-run   Print planned actions, write nothing
 #   --yes       Skip the confirmation prompt
 #   --help      Show this help message
@@ -49,7 +52,7 @@ REQUESTED=()
 
 # Repo-relative source dir, resolved without GNU `readlink -f`.
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-SOURCE_DIR="$(cd "${SCRIPT_DIR}/../commands" && pwd)"
+SOURCE_DIR="$(cd "${SCRIPT_DIR}/../skills" && pwd)"
 
 # ── Colors ────────────────────────────────────────────────────────────────────
 RED=$'\033[0;31m'
@@ -93,37 +96,36 @@ CLAUDE_HOME="${CLAUDE_HOME/#\~/$HOME}"
 CLAUDE_HOME="${CLAUDE_HOME%/}"
 
 [[ -d "$CLAUDE_HOME" ]] || error "Claude home not found: $CLAUDE_HOME"
-[[ -d "$SOURCE_DIR" ]]  || error "Command source dir not found: $SOURCE_DIR"
+[[ -d "$SOURCE_DIR" ]]  || error "Skill source dir not found: $SOURCE_DIR"
 
-TARGET_DIR="${CLAUDE_HOME}/commands"
+TARGET_DIR="${CLAUDE_HOME}/skills"
 
-# Collect the command files this repo ships.
-COMMANDS=()
-while IFS= read -r file; do
-  COMMANDS+=("$file")
-done < <(find "$SOURCE_DIR" -maxdepth 1 -type f -name '*.md' ! -name 'README.md' | sort)
+# Collect the skill directories this repo ships (any subdir with a SKILL.md).
+SKILLS=()
+while IFS= read -r skillfile; do
+  SKILLS+=("$(dirname "$skillfile")")
+done < <(find "$SOURCE_DIR" -mindepth 2 -maxdepth 2 -type f -name 'SKILL.md' | sort)
 
-(( ${#COMMANDS[@]} > 0 )) || error "No command files found in ${SOURCE_DIR}."
+(( ${#SKILLS[@]} > 0 )) || error "No skills (dirs with SKILL.md) found in ${SOURCE_DIR}."
 
 # Narrow to the names requested on the command line (default: all).
 if (( ${#REQUESTED[@]} > 0 )); then
   SELECTED=()
   for want in "${REQUESTED[@]}"; do
-    want="${want%.md}"
     match=""
-    for file in "${COMMANDS[@]}"; do
-      if [[ "$(basename "$file" .md)" == "$want" ]]; then match="$file"; break; fi
+    for dir in "${SKILLS[@]}"; do
+      if [[ "$(basename "$dir")" == "$want" ]]; then match="$dir"; break; fi
     done
-    [[ -n "$match" ]] || error "No such command: ${want}. Omit names to install all, or run with --help."
+    [[ -n "$match" ]] || error "No such skill: ${want}. Omit names to install all, or run with --help."
     SELECTED+=("$match")
   done
-  COMMANDS=("${SELECTED[@]}")
+  SKILLS=("${SELECTED[@]}")
 fi
 
 # ── Banner ────────────────────────────────────────────────────────────────────
 echo ""
 echo -e "${BOLD}╔══════════════════════════════════════════╗${RESET}"
-echo -e "${BOLD}║      Claude Command Installer            ║${RESET}"
+echo -e "${BOLD}║        Claude Skill Installer            ║${RESET}"
 echo -e "${BOLD}╚══════════════════════════════════════════╝${RESET}"
 echo ""
 info "Source      : ${SOURCE_DIR}"
@@ -136,15 +138,15 @@ fi
 $DRY_RUN && warn "DRY-RUN mode — no files will be modified."
 echo ""
 
-for file in "${COMMANDS[@]}"; do
-  info "  /$(basename "$file" .md)"
+for dir in "${SKILLS[@]}"; do
+  info "  $(basename "$dir")"
 done
 echo ""
 
 # ── Confirmation ──────────────────────────────────────────────────────────────
 if ! $DRY_RUN && ! $ASSUME_YES; then
-  $UNINSTALL && prompt="Remove these commands from ${TARGET_DIR}?" \
-             || prompt="Install these commands into ${TARGET_DIR}?"
+  $UNINSTALL && prompt="Remove these skills from ${TARGET_DIR}?" \
+             || prompt="Install these skills into ${TARGET_DIR}?"
   read -r -p "$(echo -e "${BOLD}${prompt}${RESET} [y/N] ")" reply
   [[ "$reply" =~ ^[Yy]$ ]] || { warn "Aborted."; exit 0; }
   echo ""
@@ -153,14 +155,14 @@ fi
 # ── Uninstall ─────────────────────────────────────────────────────────────────
 if $UNINSTALL; then
   removed=0
-  for file in "${COMMANDS[@]}"; do
-    name="$(basename "$file")"
+  for dir in "${SKILLS[@]}"; do
+    name="$(basename "$dir")"
     dest="${TARGET_DIR}/${name}"
     if [[ -e "$dest" || -L "$dest" ]]; then
       if $DRY_RUN; then
         info "Would remove: ${dest}"
       else
-        rm -f "$dest"
+        rm -rf "$dest"
         success "Removed: ${dest}"
       fi
       removed=$(( removed + 1 ))
@@ -169,8 +171,8 @@ if $UNINSTALL; then
     fi
   done
   echo ""
-  $DRY_RUN && info "Dry run — ${removed} file(s) would be removed." \
-           || success "Removed ${removed} command(s)."
+  $DRY_RUN && info "Dry run — ${removed} skill(s) would be removed." \
+           || success "Removed ${removed} skill(s)."
   echo ""
   exit 0
 fi
@@ -186,8 +188,8 @@ if [[ ! -d "$TARGET_DIR" ]]; then
 fi
 
 installed=0
-for file in "${COMMANDS[@]}"; do
-  name="$(basename "$file")"
+for dir in "${SKILLS[@]}"; do
+  name="$(basename "$dir")"
   dest="${TARGET_DIR}/${name}"
 
   if [[ -e "$dest" || -L "$dest" ]]; then
@@ -196,34 +198,34 @@ for file in "${COMMANDS[@]}"; do
       if $DRY_RUN; then
         info "Would back up: ${dest} -> ${bak}"
       else
-        cp "$dest" "$bak"
+        cp -R "$dest" "$bak"
         info "Backup written: ${bak}"
       fi
     elif [[ ! -L "$dest" ]]; then
-      warn "Overwriting existing file: ${dest} (use --backup to keep a copy)"
+      warn "Overwriting existing directory: ${dest} (use --backup to keep a copy)"
     fi
-    $DRY_RUN || rm -f "$dest"
+    $DRY_RUN || rm -rf "$dest"
   fi
 
   if $DRY_RUN; then
-    $COPY && info "Would copy:    ${file} -> ${dest}" \
-          || info "Would symlink: ${dest} -> ${file}"
+    $COPY && info "Would copy:    ${dir} -> ${dest}" \
+          || info "Would symlink: ${dest} -> ${dir}"
   else
     if $COPY; then
-      cp "$file" "$dest"
+      cp -R "$dir" "$dest"
     else
-      ln -s "$file" "$dest"
+      ln -s "$dir" "$dest"
     fi
-    success "Installed: /$(basename "$name" .md)"
+    success "Installed: ${name}"
   fi
   installed=$(( installed + 1 ))
 done
 
 echo ""
 if $DRY_RUN; then
-  info "Dry run — ${installed} command(s) would be installed."
+  info "Dry run — ${installed} skill(s) would be installed."
 else
-  success "Installed ${installed} command(s) into ${TARGET_DIR}"
+  success "Installed ${installed} skill(s) into ${TARGET_DIR}"
   info "Restart Claude Code (or start a new session) to pick them up."
 fi
 echo ""

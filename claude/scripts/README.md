@@ -8,16 +8,21 @@ Installs the slash commands from [`../commands/`](../commands/README.md) into a 
 
 Symlinks by default — edits in the repo take effect immediately, no reinstall. Pass `--copy` for a detached snapshot. Existing files are replaced (use `--backup` to keep a timestamped `.bak`; symlinks are replaced without one). Idempotent.
 
+Pass one or more command names to install (or uninstall) just those; with no names, every shipped command is processed.
+
 ```bash
-# Install into ~/.claude (or $CLAUDE_CONFIG_DIR)
+# Install all commands into ~/.claude (or $CLAUDE_CONFIG_DIR)
 ./install_claude_commands.sh
+
+# Install only specific commands
+./install_claude_commands.sh orchestrate cf-settings-report
 
 # Snapshot copies into a non-default Claude home
 ./install_claude_commands.sh --claude /Users/MrAnderson/.claude-work --copy
 
 # Preview, then remove
 ./install_claude_commands.sh --uninstall --dry-run
-./install_claude_commands.sh --uninstall
+./install_claude_commands.sh orchestrate --uninstall
 ```
 
 Flags:
@@ -33,6 +38,43 @@ Flags:
 | `--help` | Show usage |
 
 `README.md` in the commands directory is skipped. A new session (or restart) is needed before Claude Code picks up newly installed commands.
+
+## `install_claude_skills.sh`
+
+Installs the skills from [`../skills/`](../skills/README.md) into a Claude home. A skill is a directory containing a `SKILL.md`; each such directory is installed as `<claude_home>/skills/<name>`.
+
+Symlinks by default — edits in the repo take effect immediately, no reinstall. Pass `--copy` for a detached snapshot. Existing skill directories are replaced (use `--backup` to keep a timestamped `.bak`; symlinks are replaced without one). Idempotent.
+
+Pass one or more skill names to install (or uninstall) just those; with no names, every shipped skill is processed.
+
+```bash
+# Install all skills into ~/.claude (or $CLAUDE_CONFIG_DIR)
+./install_claude_skills.sh
+
+# Install only a specific skill
+./install_claude_skills.sh grill-me
+
+# Snapshot copies into a non-default Claude home
+./install_claude_skills.sh --claude /Users/MrAnderson/.claude-work --copy
+
+# Preview, then remove
+./install_claude_skills.sh --uninstall --dry-run
+./install_claude_skills.sh grill-me --uninstall
+```
+
+Flags:
+
+| Flag | Description |
+|------|-------------|
+| `--claude` | Path to the Claude home directory (default: `$CLAUDE_CONFIG_DIR` or `~/.claude`) |
+| `--copy` | Copy the directories instead of symlinking them |
+| `--backup` | Save a timestamped `.bak` of any skill directory being overwritten |
+| `--uninstall` | Remove the skills this repo installs, then exit |
+| `--dry-run` | Print planned actions, write nothing |
+| `--yes` | Skip the confirmation prompt |
+| `--help` | Show usage |
+
+Only subdirectories with a `SKILL.md` are installed. A new session (or restart) is needed before Claude Code picks up newly installed skills.
 
 ## `update_claude_paths.sh`
 
