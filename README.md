@@ -34,8 +34,7 @@ Shell scripts for maintaining Claude Code installations.
 | Script | Description |
 |--------|-------------|
 | [`install_claude_commands.sh`](claude/scripts/README.md#install_claude_commandssh) | Installs the slash commands from `claude/commands/` into a Claude home (symlink by default, `--copy` for a snapshot, `--uninstall` to remove). |
-| [`update_claude_paths.sh`](claude/scripts/README.md#update_claude_pathssh) | Fixes up a `.claude` directory after moving a project folder — renames encoded project dirs, rewrites path references in file contents, and updates the project's `~/.claude.json` entry (trust/allowlist/MCP). |
-| [`purge_claude_sessions.sh`](claude/scripts/README.md#purge_claude_sessionssh) | Interactively pick one or more projects in a `.claude` instance to wipe (sessions only by default; `--wipe-memory` also nukes `memory/` and `MEMORY.md`, `--wipe-config` strips the project's `~/.claude.json` entry). |
+| [`manage_claude_projects.sh`](claude/scripts/README.md#manage_claude_projectssh) | Lists every project a Claude home knows about and moves or purges them — a move renames the project's folder, rewrites path references and updates its config entry; a purge removes its sessions and config entry (memory is kept unless you say so). |
 | [`add_caveman_badge.sh`](claude/scripts/README.md#add_caveman_badgesh) | Patches a `ccstatusline` config to add (or remove) the caveman Statusline badge widget. |
 
 #### [`claude/spinner-verbs/`](claude/spinner-verbs/README.md)
