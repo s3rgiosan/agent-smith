@@ -99,6 +99,15 @@ encode_path() {
   printf '%s' "$1" | sed 's/[^A-Za-z0-9]/-/g'
 }
 
+# Removes a project folder's memory/ when it holds nothing but .DS_Store, so
+# it does not keep the folder alive.
+remove_empty_memory() {
+  local memory="$1/memory"
+  [[ -d "$memory" && ! -L "$memory" ]] || return 0
+  rm -f "$memory/.DS_Store"
+  rmdir "$memory" 2>/dev/null || true
+}
+
 # ── Argument parsing ──────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -217,6 +226,16 @@ def from_sessions(folder):
     return ""
 
 
+def has_memory(folder):
+    # An empty memory/ folder (or one with only .DS_Store) holds nothing.
+    if os.path.isfile(os.path.join(folder, "MEMORY.md")):
+        return True
+    try:
+        return any(name != ".DS_Store" for name in os.listdir(os.path.join(folder, "memory")))
+    except OSError:
+        return False
+
+
 def folder_stats(folder):
     sessions, newest = set(), 0
     for name in os.listdir(folder):
@@ -231,8 +250,7 @@ def folder_stats(folder):
                 except OSError:
                     pass
     latest = time.strftime("%Y-%m-%d %H:%M", time.localtime(newest)) if newest else "-"
-    memory = os.path.isdir(os.path.join(folder, "memory")) or os.path.isfile(os.path.join(folder, "MEMORY.md"))
-    return len(sessions), latest, memory
+    return len(sessions), latest, has_memory(folder)
 
 
 rows, used = [], set()
@@ -429,6 +447,7 @@ move_folders() {
       while IFS= read -r -d '' entry; do
         [[ -e "$target/$(basename "$entry")" ]] || mv "$entry" "$target/"
       done < <(find "$src" -mindepth 1 -maxdepth 1 -print0)
+      remove_empty_memory "$src"
       rm -f "$src/.DS_Store"
       if rmdir "$src" 2>/dev/null; then
         success "Merged: projects/${slug} → projects/${target_slug}"
@@ -989,6 +1008,7 @@ purge_folder() {
   fi
 
   $DRY_RUN && return 0
+  remove_empty_memory "$dir"
   rm -f "$dir/.DS_Store"
   if rmdir "$dir" 2>/dev/null; then
     printf "  ${RED}✗${RESET} %s\n" "$dir"
