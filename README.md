@@ -2,44 +2,63 @@
 
 ![Agent Smith](agent-smith.gif)
 
-Collection of tools, scripts, skills, and agents for agent-driven development.
+Tools, scripts, skills and agents for agent-driven development: the small things that make working with Claude Code faster, clearer and a little more fun.
 
-## What's here
+## Scripts
 
-### [`scripts/`](scripts/README.md)
+Standalone shell scripts for day-to-day maintenance. Usage and flags live in `scripts/README.md`.
 
-Standalone shell scripts for day-to-day agent and tool maintenance.
+### `update_wiki_paths.sh`
 
-| Script | Description |
-|--------|-------------|
-| [`update_wiki_paths.sh`](scripts/README.md#update_wiki_pathssh) | Rewrites path references inside an Obsidian vault after moving a project folder. |
+Moved a project folder? Your Obsidian vault still points at the old path. This rewrites every reference in one sweep, across markdown, frontmatter and any other text file.
 
-### [`claude/`](claude/README.md)
+## Claude Code
 
-Claude Code assets, scripts, and customizations.
+Commands, skills, scripts and themes for Claude Code. Each folder under `claude/` has its own README.
 
-#### [`claude/commands/`](claude/commands/README.md)
+### Commands
 
-Custom slash commands for Claude Code.
+Slash commands, installed with `install_claude_commands.sh`. Details in `claude/commands/README.md`.
 
-| Command | Description |
-|---------|-------------|
-| [`/orchestrate`](claude/commands/README.md#orchestrate) | Runs the turn on Fable as an orchestrator — Fable plans and verifies, while exploration and implementation are delegated to cheaper `sonnet`/`opus`/`haiku` subagents. |
-| [`/cf-settings-report`](claude/commands/README.md#cf-settings-report) | Generates a per-category matrix report of Cloudflare zone settings across every zone on the account, flagging cross-domain deviations with fixes (via the `cloudflare-api` MCP). |
+#### `/orchestrate`
 
-#### [`claude/scripts/`](claude/scripts/README.md)
+Runs the turn on Fable as an orchestrator: Fable plans and verifies, and hands exploration and implementation to cheaper `sonnet`, `opus` and `haiku` subagents.
 
-Shell scripts for maintaining Claude Code installations.
+#### `/cf-settings-report`
 
-| Script | Description |
-|--------|-------------|
-| [`install_claude_commands.sh`](claude/scripts/README.md#install_claude_commandssh) | Installs the slash commands from `claude/commands/` into a Claude home (symlink by default, `--copy` for a snapshot, `--uninstall` to remove). |
-| [`manage_claude_projects.sh`](claude/scripts/README.md#manage_claude_projectssh) | Lists every project a Claude home knows about and moves or purges them — a move renames the project's folder, rewrites path references and updates its config entry; a purge removes its sessions and config entry (memory is kept unless you say so). |
-| [`add_caveman_badge.sh`](claude/scripts/README.md#add_caveman_badgesh) | Patches a `ccstatusline` config to add (or remove) the caveman Statusline badge widget. |
+One report for every Cloudflare zone on the account: a matrix per dashboard category, with the settings that drift from the majority flagged and a fix for each (via the `cloudflare-api` MCP).
 
-#### [`claude/spinner-verbs/`](claude/spinner-verbs/README.md)
+### Skills
 
-Custom spinner verb themes for Claude Code — the action phrases shown while Claude is working.
+Skills Claude loads when the task matches, installed with `install_claude_skills.sh`. Details in `claude/skills/README.md`.
+
+#### `grill-me`
+
+A relentless interview that stress-tests a plan, decision or design, round after round, until every branch is walked and nothing is left assumed.
+
+### Scripts
+
+Shell scripts for running Claude Code installations. Usage and flags live in `claude/scripts/README.md`.
+
+#### `claude_statusline.sh`
+
+A three-row powerline status line under the prompt: account, model, effort, speed and cost; context, rate limits with their reset times and the prompt cache; tsk progress, project, branch, PR and worktree.
+
+#### `install_claude_commands.sh`
+
+Installs the slash commands into a Claude home. Symlinks by default, so edits in the repo apply at once; `--copy` for a snapshot, `--uninstall` to remove.
+
+#### `install_claude_skills.sh`
+
+The same for skills: symlinked by default, one skill or all of them, into any Claude home.
+
+#### `manage_claude_projects.sh`
+
+Every project a Claude home knows about, in one list. Move a project (its folder, path references, config entry and prompt history follow) or purge it (sessions and config entry go; memory stays unless you say so).
+
+### Spinner verbs
+
+Themes for the phrases Claude Code shows while it works ("Using the Force for 12s"): Movie Quotes, Monty Python, Pirate, Portuguese and Hugo. Details in `claude/spinner-verbs/README.md`.
 
 ## License
 

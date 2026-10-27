@@ -1,12 +1,77 @@
 # Claude Scripts
 
-Shell scripts for maintaining Claude Code installations.
+Shell scripts that keep Claude Code installations running smoothly: a status line worth looking at, installers for this repo's commands and skills, and a manager for the projects a Claude home collects.
+
+## `claude_statusline.sh`
+
+Everything you'd otherwise go looking for, right under the prompt: which account you're on, how much context is left, how close you are to the rate limits, and whether the prompt cache is still warm. Claude Code runs the script with the session's JSON on stdin and draws its output as three powerline rows:
+
+```
+ Personal   Opus 5.5 (1M)   Extra high   Normal   $12.50
+ 8%   5h 24% (14:30)   7d 41% (Fri 09:00)   cache 14:42
+ 0/3   agent-smith   main*   #42 changes requested   my-feature
+```
+
+### Row 1: who and what
+
+| Segment | Example | Why it's there |
+|---------|---------|----------------|
+| Account | `Personal` | Two Claude homes look the same; this one tells you which you're in. |
+| Model | `Opus 5.5 (1M)` | The model, by its product name. `(1M)` marks the 1M-token context window. |
+| Thinking | `Extra high` | Effort level (`Low` to `Max`), or `Off`. It changes with `/effort`. |
+| Speed | `Fast` / `Normal` | Whether fast mode is on. |
+| Cost | `$12.50` | Session cost at list price. On a claude.ai plan it's an estimate, not a bill. |
+
+### Row 2: how much is left
+
+| Segment | Example | Why it's there |
+|---------|---------|----------------|
+| Context | `8%` | Context window used: your cue to `/compact` or start fresh. |
+| 5-hour limit | `5h 24% (14:30)` | Usage of the 5-hour window and when it resets. |
+| 7-day limit | `7d 41% (Fri 09:00)` | Usage of the weekly window and when it resets. |
+| Prompt cache | `cache 14:42` / `cache cold` | When the cache expires. After a break, `cold` means the next prompt sends the whole context again. |
+
+### Row 3: where you are
+
+| Segment | Example | Why it's there |
+|---------|---------|----------------|
+| tsk | `0/3` | Done/total tasks of the folder's tsk project; `0/0` when it has none. |
+| Project | `agent-smith` | The git repository, or the project folder outside one. |
+| Branch | `main*` | Current branch; `*` when the working tree has changes. |
+| Pull request | `#42 changes requested` | The open PR for the branch and its review state. |
+| Worktree | `my-feature` | The worktree the session runs in. |
+
+Segments with nothing to say stay out of the way: rate limits show only on claude.ai plans, the pull request only while one is open, the worktree only in a worktree session, and tsk progress only when `tsk` is installed. Colours run on across the rows, so no two neighbours match.
+
+### Set it up
+
+Point a Claude home's `settings.json` at the script:
+
+```json
+"statusLine": {
+  "type": "command",
+  "command": "/path/to/agent-smith/claude/scripts/claude_statusline.sh --account Work --theme onedark",
+  "padding": 0
+}
+```
+
+The line shows up on the next update (a reply, a mode change, `/compact`). Edits to the script apply on the next update too.
+
+| Flag | Description |
+|------|-------------|
+| `--account` | Account name for the first segment (default: the folder name of `$CLAUDE_CONFIG_DIR`, or `.claude`) |
+| `--theme` | Segment colours: `catppuccin-mocha` (default) or `onedark` |
+| `--help` | Show usage |
+
+Needs `jq`, a [Nerd Font](https://www.nerdfonts.com/) for the icons and a truecolor terminal for the colours.
 
 ## `install_claude_commands.sh`
 
-Installs the slash commands from [`../commands/`](../commands/README.md) into a Claude home, so they show up as `/<name>` in every session.
+Installs the slash commands from `claude/commands/` into a Claude home, so they show up as `/<name>` in every session.
 
 Symlinks by default — edits in the repo take effect immediately, no reinstall. Pass `--copy` for a detached snapshot. Existing files are replaced (use `--backup` to keep a timestamped `.bak`; symlinks are replaced without one). Idempotent.
+
+The script refuses to run when the target `commands/` folder is the repo's own `claude/commands/`, or overlaps it through a symlink. Without `--yes` it asks for confirmation, so a run with no terminal needs `--yes`.
 
 Pass one or more command names to install (or uninstall) just those; with no names, every shipped command is processed.
 
@@ -31,8 +96,8 @@ Flags:
 |------|-------------|
 | `--claude` | Path to the Claude home directory (default: `$CLAUDE_CONFIG_DIR` or `~/.claude`) |
 | `--copy` | Copy the files instead of symlinking them |
-| `--backup` | Save a timestamped `.bak` of any regular file being overwritten |
-| `--uninstall` | Remove the commands this repo installs, then exit |
+| `--backup` | Save a timestamped `.bak` of any regular file being overwritten (a numeric suffix is added when the name is taken) |
+| `--uninstall` | Remove the symlinks that point into this repo, then exit. Real files with a matching name (including `--copy` copies) and symlinks to other places are skipped with a warning |
 | `--dry-run` | Print planned actions, write nothing |
 | `--yes` | Skip the confirmation prompt |
 | `--help` | Show usage |
@@ -41,9 +106,11 @@ Flags:
 
 ## `install_claude_skills.sh`
 
-Installs the skills from [`../skills/`](../skills/README.md) into a Claude home. A skill is a directory containing a `SKILL.md`; each such directory is installed as `<claude_home>/skills/<name>`.
+Installs the skills from `claude/skills/` into a Claude home. A skill is a directory containing a `SKILL.md`; each such directory is installed as `<claude_home>/skills/<name>`.
 
-Symlinks by default — edits in the repo take effect immediately, no reinstall. Pass `--copy` for a detached snapshot. Existing skill directories are replaced (use `--backup` to keep a timestamped `.bak`; symlinks are replaced without one). Idempotent.
+Symlinks by default — edits in the repo take effect immediately, no reinstall. Pass `--copy` for a detached snapshot. Existing skill directories are replaced (use `--backup` to keep a copy; symlinks are replaced without one). Idempotent.
+
+The script refuses to run when the target `skills/` folder is the repo's own `claude/skills/`, or overlaps it through a symlink. Without `--yes` it asks for confirmation, so a run with no terminal needs `--yes`.
 
 Pass one or more skill names to install (or uninstall) just those; with no names, every shipped skill is processed.
 
@@ -68,8 +135,8 @@ Flags:
 |------|-------------|
 | `--claude` | Path to the Claude home directory (default: `$CLAUDE_CONFIG_DIR` or `~/.claude`) |
 | `--copy` | Copy the directories instead of symlinking them |
-| `--backup` | Save a timestamped `.bak` of any skill directory being overwritten |
-| `--uninstall` | Remove the skills this repo installs, then exit |
+| `--backup` | Copy any skill directory being overwritten to `<claude_home>/backups/skills/<name>.<timestamp>`, outside the folder Claude Code loads skills from |
+| `--uninstall` | Remove the symlinks that point into this repo, then exit. Real directories with a matching name (including `--copy` copies) and symlinks to other places are skipped with a warning |
 | `--dry-run` | Print planned actions, write nothing |
 | `--yes` | Skip the confirmation prompt |
 | `--help` | Show usage |
@@ -103,14 +170,16 @@ Keys:
 | `d` | Purge the ticked projects (the cursor row when none is ticked) |
 | `q` | Quit |
 
-**Move** asks for the new path (tab-completion works; `~` and relative paths are expanded), shows a dry-run preview and asks for confirmation. For a row whose path is unknown it first asks for the old path and only accepts one that encodes to the folder name. Leaving a path prompt empty goes back to the list. A move:
+**Move** asks for the new path (tab-completion works; `~` and relative paths are expanded), shows a dry-run preview and asks for confirmation. For a row whose path is unknown it first asks for the old path and only accepts one that encodes to the folder name. Leaving a path prompt empty goes back to the list. A new path inside the old one, or the other way round (`/x/proj` and `/x/proj/sub`), is rejected. A move:
 
 1. Renames the project's folder under `projects/` and the folders of its sub-projects. Folders are matched by their real path, so moving `/x/proj` leaves a sibling `/x/proj-v2` alone. When the target folder already exists, only what it lacks is moved in; anything left over stays in the old folder with a warning.
-2. Rewrites path references in the text files inside those folders (sessions, subagents, memory), anchored to a path-segment boundary. A second pass rewrites `~/…` forms when the old path is under `$HOME`. Other projects' folders and the rest of the Claude home, such as `backups/`, are left as they are.
-3. Rewrites the config file as JSON. When the new path already has an entry, the two are merged: the existing entry's values win and the moved entry fills in what it lacks.
-4. Rewrites the `project` field of the matching entries in `history.jsonl`, so prompt history follows the project. Prompt text is left as it is.
+2. Rewrites path references in the text files inside those folders (sessions, subagents, memory), anchored to a path-segment boundary. A second pass rewrites `~/…` forms when the old path is inside `$HOME`. Other projects' folders and the rest of the Claude home, such as `backups/`, are left as they are.
+3. Rewrites the `projects` map of the config file as JSON; the rest of the config is left as it is. When the new path already has an entry, the two are merged: the existing entry's values win and the moved entry fills in what it lacks.
+4. Rewrites the `project` field of the matching entries in `history.jsonl`, so prompt history follows the project. Prompt text, and lines that are not valid JSON or UTF-8, are left as they are.
 
-**Purge** lists the picked projects, asks whether to delete memory too (only when one has memory), and asks for confirmation. It removes each project's sessions and their `file-history/<session>/` backups, its `sessions-index.json`, its folder once empty, and its config entry. A timestamped `<config>.purge-bak.<epoch>` backup is written before the config is edited.
+Before any write, a move checks that the config is valid JSON and that `history.jsonl` can be read. The config and `history.jsonl` are copied to `<file>.move-bak.<epoch>` before they are edited, then replaced in one step with their file mode kept. If a step fails partway, the output names the step, the steps already done, and the backups.
+
+**Purge** lists the picked projects, asks whether to delete memory too (only when one has memory), and asks for confirmation. It removes each project's sessions and their `file-history/<session>/` backups, its `sessions-index.json`, its folder once empty, and its config entry. Purge first checks that the config is valid JSON and stops with a warning before deleting anything if it is not. A timestamped `<config>.purge-bak.<epoch>` backup is written before the config is edited. Prompt history in `history.jsonl` is kept.
 
 After each action the list is rebuilt.
 
@@ -138,7 +207,7 @@ Flags:
 | `--old` | Original project path; with `--new`, moves without the list |
 | `--new` | New project path |
 | `--dry-run` | Preview every action without writing anything |
-| `--backup` | Keep `.bak` copies of files a move rewrites |
+| `--backup` | Keep `.bak` copies of the session and memory files a move rewrites (`.bak.<epoch>` when a `.bak` already exists) |
 | `--no-tilde` | Skip the extra `~/foo` pass on a move |
 | `--help` | Show usage |
 
@@ -148,32 +217,3 @@ Behavior notes:
 - Sessions are UUID-named top-level entries of a project folder: `<uuid>.jsonl` files and `<uuid>/` dirs.
 - Requires `python3`. Works with bash 3.2 (macOS) and BSD or GNU `sed`.
 - The list renders inline (no alternate screen). Terminal state is restored on normal exit, `Ctrl-C`, or `SIGTERM`.
-
-## `add_caveman_badge.sh`
-
-Patches a [ccstatusline](https://github.com/sirmalloc/ccstatusline) `settings.json` to add (or remove) a `custom-command` widget that renders the [caveman](https://github.com/JuliusBrussee/caveman) Statusline badge.
-
-The badge script is resolved from the given Claude home at `<claude>/plugins/marketplaces/caveman/hooks/caveman-statusline.sh`, so multiple Claude installs can each get their own statusline config pointing at their own caveman install.
-
-```bash
-./add_caveman_badge.sh --claude /Users/MrAnderson/.claude
-
-./add_caveman_badge.sh \
-  --claude /Users/MrAnderson/.claude-work \
-  --config /Users/MrAnderson/.config/ccstatusline/settings-work.json
-```
-
-Idempotent: re-running replaces any existing widget with id `caveman-badge`. A timestamped `.bak` is written next to the config by default.
-
-Flags:
-
-| Flag | Description |
-|------|-------------|
-| `--claude` | Path to the Claude home directory (default: `~/.claude`) |
-| `--config` | Path to ccstatusline `settings.json` (default: `~/.config/ccstatusline/settings.json`) |
-| `--line` | Zero-based index of the status line to patch (default: `0`) |
-| `--position` | `prepend` or `append` within the line (default: `prepend`) |
-| `--remove` | Remove the caveman badge instead of adding it |
-| `--dry-run` | Print resulting JSON to stdout, no writes |
-| `--no-backup` | Skip writing a `.bak` copy |
-| `--help` | Show usage |

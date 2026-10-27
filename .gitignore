@@ -9,3 +9,6 @@
 
 # Backups from sed --backup
 *.bak
+
+# Working specs and plans
+docs/superpowers/

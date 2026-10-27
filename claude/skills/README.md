@@ -1,8 +1,8 @@
 # Claude Skills
 
-Custom skills for Claude Code. Each subdirectory here is one skill — a folder containing a `SKILL.md` (with `name`/`description` frontmatter) that Claude loads when the description matches the task.
+Skills teach Claude a way of working and switch on by themselves when the task fits. Each subdirectory here is one skill: a folder with a `SKILL.md` (with `name`/`description` frontmatter) that Claude loads when the description matches the task.
 
-Install with [`../scripts/install_claude_skills.sh`](../scripts/README.md#install_claude_skillssh) (symlinks by default, so edits here take effect immediately).
+Install them with `install_claude_skills.sh` from `claude/scripts/`. It symlinks by default, so edits here take effect immediately.
 
 ## `grill-me`
 

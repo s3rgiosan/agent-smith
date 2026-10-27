@@ -1,18 +1,16 @@
 # Claude Code Spinner Verbs
 
-A collection of custom spinner verb themes for [Claude Code](https://docs.anthropic.com/en/docs/claude-code).
-
-Spinner verbs are the action phrases shown while Claude is working (e.g., "Using the Force for 12s").
+Make the wait fun. Spinner verbs are the action phrases Claude Code shows while it works ("Using the Force for 12s"), and these themes swap the defaults for something with more character.
 
 ## Available Themes
 
 | Theme | File | Verbs |
 |-------|------|-------|
-| Movie Quotes | [movie-quotes.json](movie-quotes.json) | 36 |
-| Monty Python | [monty-python.json](monty-python.json) | 30 |
-| Pirate | [pirate.json](pirate.json) | 30 |
-| Portuguese | [portuguese.json](portuguese.json) | 39 |
-| Hugo (TV Game) | [hugo.json](hugo.json) | 8 |
+| Movie Quotes | `movie-quotes.json` | 36 |
+| Monty Python | `monty-python.json` | 30 |
+| Pirate | `pirate.json` | 30 |
+| Portuguese | `portuguese.json` | 38 |
+| Hugo (TV Game) | `hugo.json` | 8 |
 
 ## Usage
 
