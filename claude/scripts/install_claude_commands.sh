@@ -47,9 +47,38 @@ DRY_RUN=false
 ASSUME_YES=false
 REQUESTED=()
 
-# Repo-relative source dir, resolved without GNU `readlink -f`.
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-SOURCE_DIR="$(cd "${SCRIPT_DIR}/../commands" && pwd)"
+# Print the physical path of $1, following symlinks (no GNU `readlink -f`).
+# Prints nothing and returns 1 when the path or its parent does not exist.
+resolve_path() {
+  local p="$1" t d
+  while [ -L "$p" ]; do
+    t="$(readlink "$p")"
+    case "$t" in
+      /*) p="$t" ;;
+      *)  p="$(dirname "$p")/$t" ;;
+    esac
+  done
+  if [ -d "$p" ]; then
+    (cd -P "$p" && pwd -P)
+  else
+    d="$(cd -P "$(dirname "$p")" 2>/dev/null && pwd -P)" || return 1
+    echo "${d}/$(basename "$p")"
+  fi
+}
+
+# Print $1, or $1-N for the first N that names nothing on disk yet.
+unique_path() {
+  local p="$1" n=0
+  while [ -e "$p" ] || [ -L "$p" ]; do
+    n=$(( n + 1 ))
+    p="$1-${n}"
+  done
+  echo "$p"
+}
+
+# Repo-relative source dir, resolved through any symlink used to run this script.
+SCRIPT_DIR="$(dirname "$(resolve_path "$0")")"
+SOURCE_DIR="$(cd -P "${SCRIPT_DIR}/../commands" && pwd -P)"
 
 # ── Colors ────────────────────────────────────────────────────────────────────
 RED=$'\033[0;31m'
@@ -95,7 +124,18 @@ CLAUDE_HOME="${CLAUDE_HOME%/}"
 [[ -d "$CLAUDE_HOME" ]] || error "Claude home not found: $CLAUDE_HOME"
 [[ -d "$SOURCE_DIR" ]]  || error "Command source dir not found: $SOURCE_DIR"
 
-TARGET_DIR="${CLAUDE_HOME}/commands"
+# Resolve the target physically (it may be a symlink) and refuse any overlap
+# with the source, since install and uninstall delete inside the target.
+TARGET_DIR="$(cd -P "$CLAUDE_HOME" && pwd -P)/commands"
+if [[ -d "$TARGET_DIR" ]]; then
+  TARGET_DIR="$(cd -P "$TARGET_DIR" && pwd -P)"
+fi
+case "${TARGET_DIR}/" in
+  "${SOURCE_DIR}/"*) error "Target ${TARGET_DIR} is the source dir or inside it (${SOURCE_DIR}). Choose a different --claude." ;;
+esac
+case "${SOURCE_DIR}/" in
+  "${TARGET_DIR}/"*) error "Source ${SOURCE_DIR} is inside the target dir (${TARGET_DIR}). Choose a different --claude." ;;
+esac
 
 # Collect the command files this repo ships.
 COMMANDS=()
@@ -145,7 +185,8 @@ echo ""
 if ! $DRY_RUN && ! $ASSUME_YES; then
   $UNINSTALL && prompt="Remove these commands from ${TARGET_DIR}?" \
              || prompt="Install these commands into ${TARGET_DIR}?"
-  read -r -p "$(echo -e "${BOLD}${prompt}${RESET} [y/N] ")" reply
+  read -r -p "$(echo -e "${BOLD}${prompt}${RESET} [y/N] ")" reply \
+    || { warn "Aborted (no input). Pass --yes to run non-interactively."; exit 1; }
   [[ "$reply" =~ ^[Yy]$ ]] || { warn "Aborted."; exit 0; }
   echo ""
 fi
@@ -156,7 +197,16 @@ if $UNINSTALL; then
   for file in "${COMMANDS[@]}"; do
     name="$(basename "$file")"
     dest="${TARGET_DIR}/${name}"
-    if [[ -e "$dest" || -L "$dest" ]]; then
+    if [[ -L "$dest" ]]; then
+      resolved="$(resolve_path "$dest")" || resolved=""
+      case "${resolved}/" in
+        "${SOURCE_DIR}/"?*) owned=true ;;
+        *)                  owned=false ;;
+      esac
+      if ! $owned; then
+        warn "Not a symlink to this repo, skipped: ${dest}"
+        continue
+      fi
       if $DRY_RUN; then
         info "Would remove: ${dest}"
       else
@@ -164,6 +214,8 @@ if $UNINSTALL; then
         success "Removed: ${dest}"
       fi
       removed=$(( removed + 1 ))
+    elif [[ -e "$dest" ]]; then
+      warn "Not a symlink to this repo, skipped — remove it by hand if it is a copy: ${dest}"
     else
       warn "Not installed: ${dest}"
     fi
@@ -192,7 +244,7 @@ for file in "${COMMANDS[@]}"; do
 
   if [[ -e "$dest" || -L "$dest" ]]; then
     if $BACKUP && [[ ! -L "$dest" ]]; then
-      bak="${dest}.bak.$(date +%Y%m%d%H%M%S)"
+      bak="$(unique_path "${dest}.bak.$(date +%Y%m%d%H%M%S)")"
       if $DRY_RUN; then
         info "Would back up: ${dest} -> ${bak}"
       else
