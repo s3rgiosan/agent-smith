@@ -1,19 +1,19 @@
 # Claude
 
-Everything here customizes Claude Code: what it can do, how it looks, and how its homes are kept tidy. Each folder has its own README.
+Everything here customizes Claude Code: what it can do, how it looks, and how its homes are kept tidy. Each folder has its own README with the details.
 
-## Commands
+## `commands/`
 
-Slash commands you type to start a workflow: `/orchestrate` and `/cf-settings-report`. They live in `commands/`.
+Slash commands you type to start a workflow, such as running a turn as an orchestrator or reporting on Cloudflare zone settings.
 
-## Skills
+## `skills/`
 
-Skills Claude picks up when a task matches, such as `grill-me` for stress-testing a plan. They live in `skills/`.
+Skills Claude picks up when a task matches, such as stress-testing a plan.
 
-## Scripts
+## `scripts/`
 
-Shell scripts that run Claude Code installations: a status line, installers for the commands and skills, and a project manager for moving and purging projects. They live in `scripts/`.
+Shell scripts that run Claude Code installations: a status line, installers for the commands and skills, and a manager for moving and purging projects.
 
-## Spinner verbs
+## `spinner-verbs/`
 
-Themes for the phrases shown while Claude works: Movie Quotes, Monty Python, Pirate, Portuguese and Hugo. They live in `spinner-verbs/`.
+Themes for the phrases shown while Claude works.
