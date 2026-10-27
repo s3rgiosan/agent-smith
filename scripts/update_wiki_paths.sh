@@ -26,6 +26,8 @@ fi
 #   --backup   Keep .bak copy of each modified file (optional)
 #   --dry-run  Preview changes without modifying any files (optional)
 #   --no-tilde Skip the extra tilde pass (~/foo refs) (optional)
+#   --yes      Skip the confirmation prompt shown when editing without --backup;
+#              required when stdin is not a terminal (optional)
 #   --help     Show this help message
 # =============================================================================
 
@@ -39,6 +41,7 @@ DRY_RUN=false
 BACKUP=false
 NO_TILDE=false
 CHANGED_FILES=0
+ASSUME_YES=false
 
 # ── Colors ────────────────────────────────────────────────────────────────────
 RED=$'\033[0;31m'
@@ -71,6 +74,7 @@ while [[ $# -gt 0 ]]; do
     --backup)   BACKUP=true;   shift ;;
     --dry-run)  DRY_RUN=true;  shift ;;
     --no-tilde) NO_TILDE=true; shift ;;
+    --yes)      ASSUME_YES=true; shift ;;
     --help|-h) usage ;;
     *) error "Unknown argument: $1. Run with --help for usage." ;;
   esac
@@ -87,7 +91,7 @@ VAULT_DIR="${VAULT_DIR%/}"
 
 [[ -d "$VAULT_DIR" ]] || error "Vault directory not found: $VAULT_DIR"
 [[ "$OLD_DIR" == "$NEW_DIR" ]] && error "--old and --new paths are identical. Nothing to do."
-[[ "$VAULT_DIR" == "$OLD_DIR"* ]] && error "--old path cannot be a parent of --vault dir (would corrupt replacements)."
+[[ "$VAULT_DIR" == "$OLD_DIR" || "$VAULT_DIR" == "$OLD_DIR"/* ]] && error "--old path cannot be a parent of --vault dir (would corrupt replacements)."
 
 # Sanity check: looks like an Obsidian vault?
 if [[ ! -d "$VAULT_DIR/.obsidian" ]]; then
@@ -114,69 +118,91 @@ else
   if $BACKUP; then SED_INPLACE=(-i .bak); else SED_INPLACE=(-i ''); fi
 fi
 
-# ── Escape paths for sed ──────────────────────────────────────────────────────
-escape_pattern()     { printf '%s' "$1" | sed 's/[][\\/.*^$]/\\&/g'; }
+# ── Escape paths for sed / grep (extended regex) ──────────────────────────────
+escape_ere()         { printf '%s' "$1" | sed 's/[][\\.*^$(){}+?|]/\\&/g'; }
+escape_pattern()     { escape_ere "$1" | sed 's/\//\\\//g'; }
 escape_replacement() { printf '%s' "$1" | sed 's/[\\/&]/\\&/g'; }
 
-# ── File sweep (usable for abs + tilde passes) ────────────────────────────────
-run_sweep() {
-  local old="$1" new="$2" label="$3"
-  local old_esc new_esc
-  old_esc=$(escape_pattern "$old")
-  new_esc=$(escape_replacement "$new")
+# ── Build patterns ────────────────────────────────────────────────────────────
+# A path matches only when the next character cannot continue a path segment
+# name (or the line ends), so /a/www does not match inside /a/www-notes.
+BOUNDARY='[^A-Za-z0-9._-]|$'
+SENT_ABS=$'\001A\001'
+SENT_TILDE=$'\001T\001'
 
-  info "Scanning vault (${label}): ${old} → ${new}"
-
-  local matched=()
-  while IFS= read -r file; do
-    [[ -z "$file" ]] && continue
-    [[ -L "$file" ]] && continue
-    matched+=("$file")
-  done < <(grep -rlIF \
-    --exclude-dir=.git \
-    --exclude-dir=.obsidian \
-    --exclude-dir=.trash \
-    --exclude-dir=wiki-export \
-    --exclude-dir=node_modules \
-    -- "$old" "$VAULT_DIR" 2>/dev/null || true)
-
-  local count=${#matched[@]}
-  if [[ $count -eq 0 ]]; then
-    return 0
+OLD_TILDE=""
+NEW_TILDE=""
+USE_TILDE=false
+# Tilde pass: rewrite ~/... forms when --old is strictly under $HOME.
+if ! $NO_TILDE && [[ -n "${HOME:-}" && "$OLD_DIR" == "$HOME"/* ]]; then
+  USE_TILDE=true
+  OLD_TILDE="~${OLD_DIR#"$HOME"}"
+  if [[ "$NEW_DIR" == "$HOME" || "$NEW_DIR" == "$HOME"/* ]]; then
+    NEW_TILDE="~${NEW_DIR#"$HOME"}"
+  else
+    NEW_TILDE="$NEW_DIR"
   fi
+fi
 
+GREP_ALT="$(escape_ere "$OLD_DIR")"
+# Each occurrence is first swapped for a sentinel (one per loop turn, so
+# adjacent matches are all found), then the sentinel becomes the new path.
+SED_ARGS=(-E
+  -e ':abs' -e "s/$(escape_pattern "$OLD_DIR")(${BOUNDARY})/${SENT_ABS}\\1/" -e 'tabs')
+if $USE_TILDE; then
+  GREP_ALT="${GREP_ALT}|$(escape_ere "$OLD_TILDE")"
+  SED_ARGS+=(-e ':tilde' -e "s/$(escape_pattern "$OLD_TILDE")(${BOUNDARY})/${SENT_TILDE}\\1/" -e 'ttilde')
+fi
+SED_ARGS+=(-e "s/${SENT_ABS}/$(escape_replacement "$NEW_DIR")/g")
+if $USE_TILDE; then
+  SED_ARGS+=(-e "s/${SENT_TILDE}/$(escape_replacement "$NEW_TILDE")/g")
+fi
+
+# ── Find files that contain a bounded match ───────────────────────────────────
+info "Scanning vault: ${OLD_DIR} → ${NEW_DIR}"
+$USE_TILDE && info "Tilde pass: ${OLD_TILDE} → ${NEW_TILDE}"
+
+matched=()
+while IFS= read -r file; do
+  [[ -z "$file" ]] && continue
+  [[ -L "$file" ]] && continue
+  matched+=("$file")
+done < <(grep -rlIE \
+  --exclude-dir=.git \
+  --exclude-dir=.obsidian \
+  --exclude-dir=.trash \
+  --exclude-dir=wiki-export \
+  --exclude-dir=node_modules \
+  -e "(${GREP_ALT})(${BOUNDARY})" -- "$VAULT_DIR" 2>/dev/null || true)
+
+CHANGED_FILES=${#matched[@]}
+
+if [[ $CHANGED_FILES -gt 0 ]]; then
   if $DRY_RUN; then
-    local cap=20 shown=0
+    cap=20 shown=0
     for f in "${matched[@]}"; do
       echo -e "  ${YELLOW}[DRY-RUN]${RESET} Would update: ${f}"
       ((shown+=1))
-      if [[ $shown -ge $cap && $count -gt $cap ]]; then
-        echo -e "  ${YELLOW}... and $((count - cap)) more${RESET}"
+      if [[ $shown -ge $cap && $CHANGED_FILES -gt $cap ]]; then
+        echo -e "  ${YELLOW}... and $((CHANGED_FILES - cap)) more${RESET}"
         break
       fi
     done
   else
-    info "Applying sed to ${count} file(s)..."
+    if ! $BACKUP && ! $ASSUME_YES; then
+      [[ -t 0 ]] || error "No backup requested and stdin is not a terminal. Re-run with --backup or --yes."
+      warn "${CHANGED_FILES} file(s) will be edited in place without a backup."
+      read -r -p "Proceed? [y/N] " answer
+      case "$answer" in
+        y|Y|yes|YES) ;;
+        *) error "Aborted. No files were modified." ;;
+      esac
+    fi
+    info "Applying sed to ${CHANGED_FILES} file(s)..."
     printf '%s\0' "${matched[@]}" \
-      | xargs -0 sed "${SED_INPLACE[@]}" "s/${old_esc}/${new_esc}/g"
-    success "Updated ${count} file(s)."
+      | xargs -0 sed "${SED_INPLACE[@]}" "${SED_ARGS[@]}"
+    success "Updated ${CHANGED_FILES} file(s)."
   fi
-
-  CHANGED_FILES=$((CHANGED_FILES + count))
-}
-
-run_sweep "$OLD_DIR" "$NEW_DIR" "absolute"
-
-# Tilde pass: rewrite ~/... forms when --old is under $HOME.
-if ! $NO_TILDE && [[ -n "${HOME:-}" && ( "$OLD_DIR" == "$HOME" || "$OLD_DIR" == "$HOME"/* ) ]]; then
-  OLD_TILDE="~${OLD_DIR#$HOME}"
-  if [[ "$NEW_DIR" == "$HOME" || "$NEW_DIR" == "$HOME"/* ]]; then
-    NEW_TILDE="~${NEW_DIR#$HOME}"
-  else
-    NEW_TILDE="$NEW_DIR"
-  fi
-  echo ""
-  run_sweep "$OLD_TILDE" "$NEW_TILDE" "tilde"
 fi
 
 # ── Summary ───────────────────────────────────────────────────────────────────
