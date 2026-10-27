@@ -13,6 +13,7 @@ fi
 # Usage:
 #   ./manage_claude_projects.sh [--claude <claude_dir>] [--dry-run]
 #   ./manage_claude_projects.sh --old <old_dir> --new <new_dir> [--claude <claude_dir>]
+#                               [--dry-run] [--backup] [--no-tilde]
 #
 # Examples:
 #   # Open the project list for ~/.claude
@@ -38,7 +39,8 @@ fi
 #   --old      Original project path; with --new, moves without the list
 #   --new      New project path
 #   --dry-run  Preview every action without writing anything
-#   --backup   Keep .bak copies of files a move rewrites
+#   --backup   Keep .bak copies of the session and memory files a move rewrites
+#              (config and history.jsonl always get a .move-bak.<epoch> copy)
 #   --no-tilde Skip the extra tilde pass (~/foo refs) on a move
 #   --help     Show this help message
 #
@@ -88,7 +90,7 @@ print_banner() {
 
 print_modes() {
   $DRY_RUN && warn "DRY-RUN mode — no files will be modified."
-  $BACKUP  && info  "Backup mode — .bak copies will be kept."
+  $BACKUP  && info  "Backup mode — .bak copies of rewritten text files will be kept."
   return 0
 }
 
@@ -111,9 +113,15 @@ remove_empty_memory() {
 # ── Argument parsing ──────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --claude)   CLAUDE_DIR="$2"; shift 2 ;;
-    --old)      OLD_DIR="$2";    shift 2 ;;
-    --new)      NEW_DIR="$2";    shift 2 ;;
+    --claude|--old|--new)
+      [[ $# -ge 2 ]] || error "Missing value for $1."
+      case "$1" in
+        --claude) CLAUDE_DIR="$2" ;;
+        --old)    OLD_DIR="$2" ;;
+        *)        NEW_DIR="$2" ;;
+      esac
+      shift 2
+      ;;
     --dry-run)  DRY_RUN=true;    shift ;;
     --backup)   BACKUP=true;     shift ;;
     --no-tilde) NO_TILDE=true;   shift ;;
@@ -137,6 +145,7 @@ if [[ "$CLAUDE_DIR" == "$HOME/.claude" ]]; then
 else
   CONFIG_FILE="$CLAUDE_DIR/.claude.json"
 fi
+HISTORY_FILE="$CLAUDE_DIR/history.jsonl"
 
 # ── Project rows ──────────────────────────────────────────────────────────────
 R_PATH=()
@@ -168,7 +177,7 @@ load_projects() {
     R_MISSING+=("$missing")
     R_MEMORY+=("$memory")
     R_CONFIG_ONLY+=("$config_only")
-  done < <(python3 - "$CONFIG_FILE" "$PROJECTS_ROOT" "$CLAUDE_DIR/history.jsonl" <<'PY'
+  done < <(python3 - "$CONFIG_FILE" "$PROJECTS_ROOT" "$HISTORY_FILE" <<'PY'
 import json, os, re, sys, time
 
 cfg, root, hist = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -326,15 +335,35 @@ fit_left() {
 # ── Move ──────────────────────────────────────────────────────────────────────
 MOVED_DIRS=0
 CHANGED_FILES=0
+MOVE_EPOCH=0
+MOVE_STEP=""
+MOVE_DONE=""
 
-# Detect sed in-place flag (BSD vs GNU); set once BACKUP is known.
+# Detect sed in-place flag (BSD vs GNU).
 sed_inplace() {
   if sed --version 2>/dev/null | grep -q 'GNU'; then
-    if $BACKUP; then SED_INPLACE=(-i.bak); else SED_INPLACE=(-i); fi
+    SED_INPLACE=(-i)
   else
-    # macOS / BSD sed requires explicit suffix (empty string = no backup)
-    if $BACKUP; then SED_INPLACE=(-i .bak); else SED_INPLACE=(-i ''); fi
+    # macOS / BSD sed requires an explicit suffix (empty string = none)
+    SED_INPLACE=(-i '')
   fi
+}
+
+# Succeeds when the config is absent or parses as JSON.
+config_is_valid() {
+  [[ ! -f "$CONFIG_FILE" ]] \
+    || python3 -c 'import json, sys; json.load(open(sys.argv[1], encoding="utf-8"))' "$CONFIG_FILE" 2>/dev/null
+}
+
+# Succeeds when history.jsonl is absent or readable by the decoder
+# rewrite_history uses.
+history_is_readable() {
+  [[ ! -f "$HISTORY_FILE" ]] \
+    || python3 -c '
+import sys
+with open(sys.argv[1], encoding="utf-8", errors="surrogateescape", newline="\n") as fh:
+    for _ in fh:
+        pass' "$HISTORY_FILE" 2>/dev/null
 }
 
 # Pattern side (sed BRE): escape \ / . * [ ] ^ $
@@ -366,13 +395,25 @@ check_move() {
     warn "Old and new paths are identical. Nothing to do."
     return 1
   fi
+  if [[ "$new" == "$old"/* ]]; then
+    warn "${new} is inside ${old}; nested moves are not supported."
+    return 1
+  fi
+  if [[ "$old" == "$new"/* ]]; then
+    warn "${old} is inside ${new}; nested moves are not supported."
+    return 1
+  fi
   if [[ "$CLAUDE_DIR" == "$old" || "$CLAUDE_DIR" == "$old"/* ]]; then
     warn "${old} contains the Claude home; moving it would corrupt the replacements."
     return 1
   fi
   # Checked before any write so a bad config cannot leave a half-done move.
-  if [[ -f "$CONFIG_FILE" ]] && ! python3 -c 'import json, sys; json.load(open(sys.argv[1]))' "$CONFIG_FILE" 2>/dev/null; then
+  if ! config_is_valid; then
     warn "Config is not valid JSON: ${CONFIG_FILE}"
+    return 1
+  fi
+  if ! history_is_readable; then
+    warn "History is not readable: ${HISTORY_FILE}"
     return 1
   fi
   return 0
@@ -505,6 +546,14 @@ run_sweep() {
     done
   else
     info "Applying sed to ${count} file(s)..."
+    if $BACKUP; then
+      local f bak
+      for f in "${matched[@]}"; do
+        bak="${f}.bak"
+        [[ -e "$bak" ]] && bak="${f}.bak.${MOVE_EPOCH}"
+        cp -p "$f" "$bak"
+      done
+    fi
     printf '%s\0' "${matched[@]}" \
       | xargs -0 sed "${SED_INPLACE[@]}" \
           -e "s/${old_esc}\\([^${SEGMENT_CHARS}]\\)/${new_esc}\\1/g" \
@@ -515,26 +564,41 @@ run_sweep() {
   CHANGED_FILES=$((CHANGED_FILES + count))
 }
 
-# Rewrites every string key and value of the config file for each old/new
-# pair, at path-segment boundaries. When a renamed key collides with an
+# Rewrites the "projects" map of the config file for each old/new pair, at
+# path-segment boundaries: every key, and every string inside each entry. The
+# rest of the config is left as it is. When a renamed key collides with an
 # existing one, the existing entry wins and the moved entry fills the fields
-# it lacks.
+# it lacks. The file is replaced atomically after a timestamped backup.
 rewrite_config() {
   [[ -f "$CONFIG_FILE" ]] || return 0
 
-  local dry=0 backup=0 changed
+  local dry=0 out changed bak
   $DRY_RUN && dry=1
-  $BACKUP && backup=1
 
-  changed=$(python3 - "$CONFIG_FILE" "$dry" "$backup" "$@" <<'PY'
-import json, re, shutil, sys
+  out=$(python3 - "$CONFIG_FILE" "$dry" "$MOVE_EPOCH" "$@" <<'PY'
+import json, os, re, shutil, stat, sys, tempfile
 
-cfg, dry, backup = sys.argv[1], sys.argv[2] == "1", sys.argv[3] == "1"
+cfg, dry, epoch = sys.argv[1], sys.argv[2] == "1", sys.argv[3]
 pairs = sys.argv[4:]
 rules = [
     (re.compile(re.escape(pairs[i]) + r"(?=[^A-Za-z0-9._-]|$)"), pairs[i + 1])
     for i in range(0, len(pairs), 2)
 ]
+
+
+def write_atomic(path, text, errors="strict"):
+    path = os.path.realpath(path)
+    mode = stat.S_IMODE(os.stat(path).st_mode)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".tmp-")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", errors=errors, newline="") as fh:
+            fh.write(text)
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
 
 
 def rewrite(text):
@@ -572,49 +636,73 @@ def walk(node):
     return node
 
 
-with open(cfg) as fh:
+with open(cfg, encoding="utf-8") as fh:
     text = fh.read()
 data = json.loads(text)
-result = walk(data)
+if not isinstance(data, dict) or not isinstance(data.get("projects"), dict):
+    print(0)
+    sys.exit(0)
+result = dict(data)
+result["projects"] = walk(data["projects"])
 if result == data:
     print(0)
     sys.exit(0)
 print(1)
 if not dry:
-    if backup:
-        shutil.copy2(cfg, cfg + ".bak")
-    with open(cfg, "w") as fh:
-        json.dump(result, fh, indent=2, ensure_ascii=False)
-        if text.endswith("\n"):
-            fh.write("\n")
+    backup = "%s.move-bak.%s" % (cfg, epoch)
+    shutil.copy2(cfg, backup)
+    print(backup)
+    body = json.dumps(result, indent=2, ensure_ascii=False)
+    write_atomic(cfg, body + ("\n" if text.endswith("\n") else ""))
 PY
   )
 
+  changed="${out%%$'\n'*}"
   [[ "$changed" == "1" ]] || return 0
   info "Scanning config: ${CONFIG_FILE}"
   if $DRY_RUN; then
     echo -e "  ${YELLOW}[DRY-RUN]${RESET} Would update: ${CONFIG_FILE}"
   else
+    bak="${out#*$'\n'}"
+    info "Config backup: ${bak}"
     success "Updated config: ${CONFIG_FILE}"
   fi
   CHANGED_FILES=$((CHANGED_FILES + 1))
 }
 
 # Rewrites the "project" field of history.jsonl entries for old and its
-# sub-paths, so prompt history follows the project. Prompt text is kept.
+# sub-paths, so prompt history follows the project. Prompt text is kept, and
+# lines that are not JSON are written back unchanged. The file is replaced
+# atomically after a timestamped backup.
 rewrite_history() {
-  local old="$1" new="$2" hist="$CLAUDE_DIR/history.jsonl" dry=0 backup=0 changed
+  local old="$1" new="$2" hist="$HISTORY_FILE" dry=0 out changed bak
   [[ -f "$hist" ]] || return 0
   $DRY_RUN && dry=1
-  $BACKUP && backup=1
 
-  changed=$(python3 - "$hist" "$old" "$new" "$dry" "$backup" <<'PY'
-import json, shutil, sys
+  out=$(python3 - "$hist" "$old" "$new" "$dry" "$MOVE_EPOCH" <<'PY'
+import json, os, shutil, stat, sys, tempfile
 
 hist, old, new = sys.argv[1:4]
-dry, backup = sys.argv[4] == "1", sys.argv[5] == "1"
+dry, epoch = sys.argv[4] == "1", sys.argv[5]
+
+
+def write_atomic(path, text, errors="strict"):
+    path = os.path.realpath(path)
+    mode = stat.S_IMODE(os.stat(path).st_mode)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".tmp-")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", errors=errors, newline="") as fh:
+            fh.write(text)
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+
+
 out, changed = [], 0
-with open(hist, encoding="utf-8") as fh:
+with open(hist, encoding="utf-8", errors="surrogateescape", newline="\n") as fh:
     for line in fh:
         try:
             entry = json.loads(line)
@@ -629,20 +717,41 @@ with open(hist, encoding="utf-8") as fh:
         out.append(line)
 print(changed)
 if changed and not dry:
-    if backup:
-        shutil.copy2(hist, hist + ".bak")
-    with open(hist, "w", encoding="utf-8") as fh:
-        fh.writelines(out)
+    backup = "%s.move-bak.%s" % (hist, epoch)
+    shutil.copy2(hist, backup)
+    print(backup)
+    write_atomic(hist, "".join(out), errors="surrogateescape")
 PY
   )
 
+  changed="${out%%$'\n'*}"
   [[ "${changed:-0}" != "0" ]] || return 0
   if $DRY_RUN; then
     echo -e "  ${YELLOW}[DRY-RUN]${RESET} Would update: ${hist} (${changed} prompt(s))"
   else
+    bak="${out#*$'\n'}"
+    info "History backup: ${bak}"
     success "Updated ${hist} (${changed} prompt(s))"
   fi
   CHANGED_FILES=$((CHANGED_FILES + 1))
+}
+
+# Records that the previous move step finished and the next one is starting.
+move_step() {
+  if [[ -n "$MOVE_STEP" ]]; then
+    MOVE_DONE="${MOVE_DONE:+${MOVE_DONE}, }${MOVE_STEP}"
+  fi
+  MOVE_STEP="$1"
+}
+
+# EXIT trap: when a move stops partway, says which steps are done so the
+# rest can be finished by hand.
+report_partial_move() {
+  [[ -n "$MOVE_STEP" ]] && ! $DRY_RUN || return 0
+  warn "Move stopped during: ${MOVE_STEP}"
+  warn "Completed: ${MOVE_DONE:-none}"
+  warn "Config and history backups: ${CONFIG_FILE}.move-bak.${MOVE_EPOCH}, ${HISTORY_FILE}.move-bak.${MOVE_EPOCH}"
+  return 0
 }
 
 # Moves old to new: the projects/ folders, the text inside them, the config
@@ -653,6 +762,9 @@ run_move() {
   local old="$1" new="$2"
   MOVED_DIRS=0
   CHANGED_FILES=0
+  MOVE_EPOCH=$(date +%s)
+  MOVE_STEP=""
+  MOVE_DONE=""
   sed_inplace
 
   move_rows "$old"
@@ -662,10 +774,11 @@ run_move() {
   done < <(move_dirs "$old" "$new")
 
   local pairs=("$old" "$new")
+  move_step "absolute sweep"
   run_sweep "$old" "$new" "absolute" ${dirs[@]+"${dirs[@]}"}
 
   # Tilde pass: rewrite ~/... forms when old is under $HOME.
-  if ! $NO_TILDE && [[ -n "${HOME:-}" && ( "$old" == "$HOME" || "$old" == "$HOME"/* ) ]]; then
+  if ! $NO_TILDE && [[ -n "${HOME:-}" && "$old" == "$HOME"/* ]]; then
     local old_tilde new_tilde
     old_tilde="~${old#"$HOME"}"
     if [[ "$new" == "$HOME" || "$new" == "$HOME"/* ]]; then
@@ -674,14 +787,19 @@ run_move() {
       new_tilde="$new"
     fi
     echo ""
+    move_step "tilde sweep"
     run_sweep "$old_tilde" "$new_tilde" "tilde" ${dirs[@]+"${dirs[@]}"}
     pairs+=("$old_tilde" "$new_tilde")
   fi
 
+  move_step "config"
   rewrite_config "${pairs[@]}"
+  move_step "history"
   rewrite_history "$old" "$new"
   echo ""
+  move_step "folders"
   move_folders "$old" "$new"
+  move_step ""
 
   echo ""
   echo -e "${BOLD}── Summary ────────────────────────────────${RESET}"
@@ -862,7 +980,8 @@ read_path() {
   local saved rc=0
   saved=$(stty -g)
   # No -r: readline tab-completion escapes spaces as '\ ', which read unescapes.
-  read -e -p "$1" READ_INPUT || rc=1
+  # IFS= keeps leading and trailing spaces of the typed path.
+  IFS= read -e -p "$1" READ_INPUT || rc=1
   # stty -g output is space-separated — must be unquoted so stty parses tokens.
   stty $saved
   return $rc
@@ -1018,17 +1137,34 @@ purge_folder() {
 }
 
 # Removes the given keys from the config file's "projects" map. Writes a
-# timestamped backup first. Prints one "backup <path>" line, then each
+# timestamped backup first and replaces the file atomically. Prints one "backup <path>" line, then each
 # removed key.
 remove_config_keys() {
   [[ -f "$CONFIG_FILE" && $# -gt 0 ]] || return 0
   local dry=0
   $DRY_RUN && dry=1
   python3 - "$CONFIG_FILE" "$dry" "$@" <<'PY'
-import json, shutil, sys, time
+import json, os, shutil, stat, sys, tempfile, time
 
 cfg, dry, keys = sys.argv[1], sys.argv[2] == "1", sys.argv[3:]
-with open(cfg) as fh:
+
+
+def write_atomic(path, text):
+    path = os.path.realpath(path)
+    mode = stat.S_IMODE(os.stat(path).st_mode)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".tmp-")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as fh:
+            fh.write(text)
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+
+
+with open(cfg, encoding="utf-8") as fh:
     text = fh.read()
 data = json.loads(text)
 projects = data.get("projects", {})
@@ -1039,10 +1175,8 @@ if removed and not dry:
     print("backup " + backup)
     for key in removed:
         del projects[key]
-    with open(cfg, "w") as fh:
-        json.dump(data, fh, indent=2, ensure_ascii=False)
-        if text.endswith("\n"):
-            fh.write("\n")
+    body = json.dumps(data, indent=2, ensure_ascii=False)
+    write_atomic(cfg, body + ("\n" if text.endswith("\n") else ""))
 for key in removed:
     print(key)
 PY
@@ -1050,8 +1184,14 @@ PY
 
 # Purges the given rows: lists them, asks about memory, confirms, removes.
 action_purge() {
-  local i any_memory=false wipe_memory=false reply line
+  local i any_memory=false wipe_memory=false reply line config_out
   local keys=()
+
+  if ! config_is_valid; then
+    warn "Config is not valid JSON: ${CONFIG_FILE}. Nothing was purged."
+    pause
+    return 0
+  fi
 
   echo ""
   echo -e "${BOLD}── Marked for purge ───────────────────────${RESET}"
@@ -1087,6 +1227,11 @@ action_purge() {
   done
 
   local config_removed=0
+  config_out=$(remove_config_keys "${keys[@]+"${keys[@]}"}") || {
+    warn "Could not update the config: ${CONFIG_FILE}. Remove these entries by hand:"
+    printf '  %s\n' "${keys[@]}"
+    config_out=""
+  }
   while IFS= read -r line; do
     [[ -z "$line" ]] && continue
     if [[ "$line" == "backup "* ]]; then
@@ -1098,7 +1243,7 @@ action_purge() {
       printf "  ${RED}✗${RESET} config entry: %s\n" "$line"
       config_removed=$((config_removed + 1))
     fi
-  done < <(remove_config_keys "${keys[@]+"${keys[@]}"}")
+  done <<< "$config_out"
 
   echo ""
   echo -e "${BOLD}── Summary ────────────────────────────────${RESET}"
@@ -1130,6 +1275,7 @@ if [[ -n "$OLD_DIR" || -n "$NEW_DIR" ]]; then
   echo ""
 
   load_projects
+  trap report_partial_move EXIT
   run_move "$OLD_DIR" "$NEW_DIR"
   $DRY_RUN && info "Re-run without --dry-run to apply changes."
   exit 0
@@ -1153,7 +1299,7 @@ echo ""
 # Restores the terminal on any exit, including Ctrl-C at a prompt or pause.
 TUI_STTY_SAVE=$(stty -g)
 trap 'tui_cleanup; exit 130' INT TERM
-trap 'tui_cleanup' EXIT
+trap 'tui_cleanup; report_partial_move' EXIT
 
 while true; do
   tui_list
