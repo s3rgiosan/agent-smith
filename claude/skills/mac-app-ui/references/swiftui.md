@@ -18,7 +18,7 @@ Native controls already follow the guidelines. Use them as they are and spend ef
 ## Wiring traps
 
 - Paste, copy, undo: route through the Edit menu (`.onPasteCommand`, `CommandGroup(after: .pasteboard)`), not an `NSEvent` key monitor, so Edit > Paste and the menu shortcut both work.
-- About: `NSApp.orderFrontStandardAboutPanel(options:)` with credits (the one-line description) from a "About <App>" item replacing `.appInfo`; set `NSHumanReadableCopyright` to `© <current year> Sérgio Santos` in Info.plist so the panel shows it.
+- About: `NSApp.orderFrontStandardAboutPanel(options:)` with credits (the one-line description) from a "About <App>" item replacing `.appInfo`; set `NSHumanReadableCopyright` to `© <current year> <copyright holder in the project's LICENSE>` in Info.plist so the panel shows it.
 - Help: replace `.help` with one "<App> Help" item that opens the app's docs or README URL (`openURL`), unless the app ships a Help Book.
 - Accessibility: `.accessibilityLabel` on every icon-only `Button` and on custom progress or status views; `.accessibilityValue` for progress; announce transient feedback (`AccessibilityNotification.Announcement`) instead of relying on animation alone.
 - Every action reachable from a menu or shortcut, not only from a bottom bar or a hover button.

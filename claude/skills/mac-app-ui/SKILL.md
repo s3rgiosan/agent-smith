@@ -1,22 +1,22 @@
 ---
-name: s3rgiosan-app-ui
-description: Use when building, restyling or reviewing the UI of one of s3rgiosan's Mac apps (Vigia, TuneDrop, Concilia, tskdeck, Compasso, Rumo, snaptty or a new one) — Tauri or Electron webview apps and SwiftUI/AppKit apps — including windows, sidebars, lists, type sizes, colours, menus, Settings, About, menu-bar extras and app icons; also when a Mac app UI "looks like a web page", "looks like a terminal" or has text that is too small.
+name: mac-app-ui
+description: Use when building, restyling or reviewing a Mac app's UI — Tauri or Electron webview apps and SwiftUI/AppKit apps — including windows, sidebars, lists, type sizes, colours, menus, Settings, About, menu-bar extras and app icons; also when a Mac app UI "looks like a web page", "looks like a terminal" or has text that is too small.
 license: MIT
 compatibility: macOS 14+; Tauri 2, Electron 32+, SwiftUI
 metadata:
   author: s3rgiosan
 ---
 
-# s3rgiosan app UI standard
+# Mac app UI standard
 
-Every app in the family follows Apple's Human Interface Guidelines for macOS and the same house conventions, so the apps feel native and consistent with each other. Native controls already follow the guidelines; the work is in webview apps, custom views and the platform wiring around them.
+Every app follows Apple's Human Interface Guidelines for macOS and the same house conventions, so the apps feel native and consistent with each other. Native controls already follow the guidelines; the work is in webview apps, custom views and the platform wiring around them.
 
 ## Step 1: ask before building
 
 Ask the user these and record the answers in the project's CLAUDE.md. Don't assume.
 
 1. **Platforms.** macOS only (the default), or also Linux and Windows? Only cross-platform apps add `CmdOrCtrl`/`ctrlKey` handling, non-Mac window chrome and per-platform configs.
-2. **Menu-bar extra.** Does the app need an always-visible status item in the macOS menu bar? Only apps whose purpose is glanceable status need one (Vigia does). It is not a default.
+2. **Menu-bar extra.** Does the app need an always-visible status item in the macOS menu bar? Only apps whose purpose is glanceable status need one, such as a CI or system monitor. It is not a default.
 3. **Shape.** Regular windowed app, menu-bar-only app (no Dock icon), or both?
 
 ## Step 2: apply the house conventions
@@ -27,12 +27,12 @@ Ask the user these and record the answers in the project's CLAUDE.md. Don't assu
 | Colour | System/semantic colours and the user's accent. No hard-coded brand blue/green for accent or selection. Light and dark always; 4.5:1 for text under 18pt. |
 | Selection | Lists and tables: a highlight, no focus ring. Accent fill + white text while the list has focus (darken the fill until white reaches 4.5:1); grey when focus is elsewhere or the window is inactive. Text and search fields: the system focus ring. |
 | App menu bar | Every app with a Dock icon sets its own: App (About, Settings… ⌘,, Services, Hide, Hide Others, Show All, Quit), File, Edit, View, Window, Help. Help holds "<App> Help", opening the app's docs or README URL. Every custom item is wired and tested. Menu-bar-only apps: About, Settings… and Quit live in the status item's menu; while their Settings window is open (and the app is briefly Regular) they show a reduced app menu — App (About, Settings…, Hide, Hide Others, Show All, Quit), Edit, Window — so copy/paste and ⌘W work. |
-| Menu-bar extra | Only when Step 1 says so. A native menu when every entry is one line of text, optionally with an icon or checkmark. A small popover window (Vigia: 380×520) when entries need two lines, grouped rows with metadata, or inline controls; its footer may hold Settings… and a "More" button opening the same native menu as a right-click (About, Settings…, Quit). |
+| Menu-bar extra | Only when Step 1 says so. A native menu when every entry is one line of text, optionally with an icon or checkmark. A small popover window (about 360–380 × 480–520) when entries need two lines, grouped rows with metadata, or inline controls; its footer may hold Settings… and a "More" button opening the same native menu as a right-click (About, Settings…, Quit). |
 | Settings | Its own non-modal window, opened by Settings… ⌘,; changes apply immediately; no Save/Cancel; no Close button. One store every window reads, with a change broadcast. |
-| About | The native About panel, first app-menu item "About <App>" (menu-bar-only apps: first item in the status item's menu). Product name in its proper case, version once, `© <current year> Sérgio Santos`, a one-line description taken from the README tagline (ask if there's none), the design-system icon. |
+| About | The native About panel, first app-menu item "About <App>" (menu-bar-only apps: first item in the status item's menu). Product name in its proper case, version once, `© <current year> <copyright holder in the project's LICENSE>`, a one-line description taken from the README tagline (ask if there's none), the app icon. |
 | Errors | Inline next to what failed; a banner that stays until dismissed for app-level errors, text selectable; modal alerts only to confirm destructive actions. |
 | Empty states | A title, one line of explanation, and the one action that fills it. |
-| Icons | In-app: SF Symbols (SwiftUI) or SF Symbols exported as PNG masks (webview; Vigia's `scripts/export-symbols.swift` + `scripts/symbols.mjs`, Lucide on Linux/Windows because the SF Symbols licence covers Apple platforms only). App icon: the family design system — read `project/README.md` of https://claude.ai/artifact/QimJSWWYsG1ghfNaSprKxy; never redraw or restate its recipe. |
+| Icons | In-app: SF Symbols (SwiftUI) or SF Symbols exported as PNG masks (webview: render each symbol with `NSImage(systemSymbolName:)` to a black-on-transparent PNG and use it as a CSS mask; Lucide on Linux/Windows because the SF Symbols licence covers Apple platforms only). App icon: follow the icon design system the user names; by default the one at https://claude.ai/artifact/QimJSWWYsG1ghfNaSprKxy (read its `project/README.md`). Never redraw or restate its recipe. |
 | Motion | Spinners and transitions stop or simplify under `prefers-reduced-motion` / Reduce Motion. |
 | Wording | Title Case for buttons, menu items, window and tab titles; sentence case for labels, help text and descriptions; "…" when a command opens more UI. |
 | Accessibility | Every icon-only control has a label; status never by colour alone; keyboard reaches everything; Full Keyboard Access works. |

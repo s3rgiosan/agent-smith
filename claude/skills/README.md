@@ -8,9 +8,9 @@ Install them with `install_claude_skills.sh` from `claude/scripts/`. It symlinks
 
 A relentless interview that stress-tests a plan, decision, or design until you and Claude reach a shared understanding — every branch of the decision walked, nothing silently assumed.
 
-## `s3rgiosan-app-ui`
+## `mac-app-ui`
 
-The UI standard for s3rgiosan's Mac apps (Vigia, TuneDrop, Concilia, tskdeck and the next ones), built on Apple's Human Interface Guidelines for macOS.
+A UI standard for Mac apps, built on Apple's Human Interface Guidelines for macOS.
 
 It starts by asking which platforms the app targets, whether it needs a menu-bar extra, and its shape. It then applies house conventions for type, system colours and the user's accent, selection, the app menu bar, the Settings window, the About panel, errors, empty states, icons and accessibility. References cover Tauri and Electron webview apps, SwiftUI/AppKit apps, and sourced macOS HIG facts. Two scripts check a webview UI: one renders it in WKWebView in light or dark, the other renders real AppKit controls to compare against. Triggers when building, restyling or reviewing one of these apps, or when a Mac app UI looks like a web page or a terminal or its text is too small.
 
