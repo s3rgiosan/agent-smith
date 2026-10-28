@@ -34,43 +34,40 @@ description: Use when building, restyling or reviewing a Mac app's UI (Tauri, El
 | Metadata | 12/15 Callout | 400, secondary label |
 | Sidebar section headers, badges | 11/14 Subheadline | 600 |
 
-Terminal-like apps lack hierarchy, not size: four or more sizes per screen, nothing below 11px, Title Case headers without tracking, monospace only for code, tabular figures. Two-line rows about 44px; single-line rows 24–28px. ⌘+/⌘− zoom serves users who want larger text.
+A screen that reads like a terminal lacks hierarchy, not size. Fix it with four or more sizes per screen from the table, nothing below 11px, Title Case headers at default tracking, monospace only for code, and tabular figures. Zoom (`references/menus-settings-about.md` → Zoom) serves users who want larger text.
+
+**Windows.** Each main window's minimum size comes from the app config: Tauri `minWidth`/`minHeight`, SwiftUI `.frame(minWidth:minHeight:)`.
 
 **Colour.** Semantic system colours as light/dark tokens. The user's accent drives selection, sidebar icons and primary buttons; an app accent shows only under Multicolor. Selected rows: selected-content background and white text while the list has focus; unemphasized background and label colour otherwise. Contrast: 4.5:1 for text under 18pt, 3:1 at 18pt+ or bold (HIG); 3:1 for icons and control borders (WCAG 1.4.11). `grep -rnE '#[0-9a-fA-F]{3,8}\b' src/` hits only the token block.
 
-**Wiring contract.** List each menu, context-menu and status item with its handler and emitted event. List each permission with where it's declared: Tauri capability, Electron entitlement, Info.plist usage string.
+**Wiring contract.** A repo file (for example `docs/wiring.md`) lists each menu, context-menu and status item with its handler and emitted event, and each permission with where it's declared (Tauri capability, Electron entitlement, Info.plist usage string). It goes to the user with the handoff.
 
-References: `references/webview.md` (Tauri, Electron), `references/swiftui.md`, `references/menus-settings-about.md` (menus, menu-bar extra, Settings, About, app icon, alerts, wording), `references/hig-macos.md` (sourced HIG facts).
+References: `references/webview.md` (Tauri, Electron, preview harness), `references/swiftui.md`, `references/menus-settings-about.md` (menus, zoom, shortcuts, Settings, About, alerts, empty states, wording), `references/hig-macos.md` (sourced HIG facts).
 
 ## Step 3: verify before handing over
 
-The app goes to the user for testing only with a complete conformance table that has no "Doesn't" rows.
+Scripts need Xcode command line tools; point every output path at a scratch directory. In order:
 
-You run (from the skill's base directory; needs Xcode command line tools):
-1. Build, launch, then `swift <skill-dir>/scripts/webkit-snapshot.swift <url> <w> <h> <out.png> <light|dark> "<js>"` per screen at the minimum window size, both themes; read the PNGs. Pass: builds, nothing clipped, legible.
-2. Pass `[...new Set([...document.querySelectorAll('body *')].map(e => getComputedStyle(e).fontSize))].join()` as `<js>`; it prints. Pass: four+ sizes, none under 11px.
-3. Hex grep. Pass: token block only.
-4. Check config keys and APIs in installed source or docs. Pass: each cited or reported unverified.
-5. Conformance table. Rows: every surface (window chrome, toolbar, sidebar, lists, detail panes, sheets and dialogs, alerts and errors, Settings, About, menus, context menus, status item) and every control type on them (push, default, pop-up, field, search, checkbox, radio, segmented, switch). Render native controls with `swift <skill-dir>/scripts/appkit-reference.swift <out-dir>` and compare each control's snapshot in the same appearance: shape, fill, border, height, corner radius, font. Capture a native key window with `sh <skill-dir>/scripts/native-window.sh <out-dir>` and compare window chrome, sidebar and toolbar against it; build to the capture when it differs from HIG wording. Columns: element, Follows / Partly / Doesn't, evidence (file:line or PNG), source (`hig-macos.md` section or HIG URL). Fix every Doesn't, re-snapshot, and put the table in the handoff.
+1. **Inventory.** The surfaces present (window chrome, toolbar, sidebar, lists, detail panes, sheets and dialogs, alerts and errors, empty states, Settings, About, menus, context menus, status item) and the control types on them (push, default, pop-up, pull-down, field, search, checkbox, radio, segmented, switch).
+2. **Snapshot plan.** Every surface opens from a preview URL. Webview apps get a dev-only preview harness: mocked IPC, loaded only in dev outside the native shell, and a URL control per surface (`references/webview.md` → Preview harness); clicks in the snapshot JS run once after load and miss asynchronous state. Native-only surfaces (menus, context menus, pull-down menus, alerts, About, traffic lights, window config) get a verdict from code with file:line evidence, which counts as checked, and are listed for the user to confirm.
+3. **Native references.** `swift <skill-dir>/scripts/appkit-reference.swift <out-dir>` writes `ak-<light|dark>-<control>.png`; controls draw in the inactive-window state, without accent fills. `sh <skill-dir>/scripts/native-window.sh <out-dir>` writes `native-window-light.png` and `native-window-dark.png`, a key window with sidebar and toolbar; on failure it writes `native-window-<mode>-cached.png`, which lacks materials and active-state colours.
+4. **Compare.** Build, launch, and snapshot each surface from the dev server URL (Tauri `build.devUrl`) at the minimum window size in both themes: `swift <skill-dir>/scripts/webkit-snapshot.swift <url> <w> <h> <out.png> <light|dark> "<js>"`; read every PNG. Pass: builds; legible (no clipped or overlapping text, truncation only with an ellipsis, contrast per Colour). Per screen, `<js>` = `[...new Set([...document.querySelectorAll('body *')].map(e => getComputedStyle(e).fontSize))].join()` prints its sizes. Pass: none under 11px; main-window screens use four or more. Hex grep: token block only. Config keys and APIs: cited from installed source or docs, or reported unverified. Compare each control with its AppKit snapshot in the same appearance (shape, fill, border, height, corner radius, font), and chrome, sidebar and toolbar with the native capture; build to the capture where it differs from HIG wording.
+5. **Table.** Rows: every surface and control type from the inventory. Columns: element, verdict (Follows / Partly / Doesn't / Not checked), evidence (file:line or PNG), source (`hig-macos.md` section or HIG URL). A Partly row states the measured difference: app value vs native value.
+
+Fix every Doesn't and re-snapshot. Hand over only when the table has no Doesn't and no Not checked rows; each Partly row is fixed or listed in the handoff as an open decision for the user. A delegated review gets a time budget (30 minutes unless the user sets one) and marks unreached rows Not checked.
 
 The user confirms:
 - VoiceOver (⌘F5) announces every control in the main flow.
 - Accent and appearance switches update the running app.
 - Full Keyboard Access: Tab reaches every control; arrows move through lists.
 - Every wiring-contract entry fires.
+- The native-only surfaces listed in the table.
 
 ## Common mistakes
 
 | Mistake | Fix |
 |---|---|
-| Flat scale: one or two sizes for everything | The role scale. |
 | `AccentColor` keyword as the user's accent | Native accent read (`references/webview.md`). |
-| All-caps tracked headers, monospace numbers | Title Case; tabular figures. |
 | Custom title bar without a sidebar | Standard title bar. |
 | Settings drawer with Save | Settings window, immediate changes. |
-| Items emitting unhandled events | Wiring contract. |
-| Permission used, not declared | Declare it. |
 | "Dynamic Type" on macOS | Fixed styles plus zoom. |
-| Global `user-select: none` | Chrome only. |
-| Config claims from memory | Check installed source. |
-| Handing over with controls never compared to AppKit | Conformance table first. |

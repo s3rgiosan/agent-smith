@@ -5,8 +5,7 @@ Native controls already follow the guidelines. Use them as they are and spend th
 ## Structure
 
 - Windowed app: `WindowGroup` (or `Window` for a single window) with `NavigationSplitView` for sidebar layouts; `Table` or `List` for collections, with selection and context menus; toolbar items as `Label`s with `.help`.
-- Minimum window size: `.frame(minWidth:minHeight:)` on the root view of every main window. Step 3 checks run at it.
-- Empty states: `ContentUnavailableView` with a title, one line, and the action that fills the view; when content arrives by itself, the line says how.
+- Empty states: `ContentUnavailableView` (content: `menus-settings-about.md` → Wording and accessibility).
 
 ## Type and colour
 
@@ -17,5 +16,5 @@ Native controls already follow the guidelines. Use them as they are and spend th
 ## Wiring traps
 
 - Paste, copy, undo: route through the Edit menu (`.onPasteCommand`, `CommandGroup(after: .pasteboard)`) so Edit > Paste and its shortcut both work; an `NSEvent` key monitor bypasses the menu.
-- Accessibility: `.accessibilityLabel` on every icon-only `Button` and on custom progress or status views; `.accessibilityValue` for progress; `AccessibilityNotification.Announcement` for transient feedback.
+- Accessibility: `.accessibilityLabel` on icon-only `Button`s and on custom progress or status views; `.accessibilityValue` for progress; `AccessibilityNotification.Announcement` for transient feedback.
 - Every action is reachable from a menu or shortcut, as well as from any bottom bar or hover button.

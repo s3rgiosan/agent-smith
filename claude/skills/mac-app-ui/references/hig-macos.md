@@ -1,6 +1,6 @@
 # Apple HIG: macOS facts
 
-Extracted from the JSON feed behind each page (`https://developer.apple.com/tutorials/data/design/human-interface-guidelines/<slug>.json`). Human URL base: `https://developer.apple.com/design/human-interface-guidelines/<slug>`. Quotes are Apple's wording. "Not stated" means the page gives no value. Several tables on the pages have API-name or image-only columns that the JSON does not expose; those are noted.
+Page URL: `https://developer.apple.com/design/human-interface-guidelines/<slug>`; its text is also served as JSON at `https://developer.apple.com/tutorials/data/design/human-interface-guidelines/<slug>.json`. Quotes are Apple's wording. "Not stated" means the page gives no value. Notes saying a column is empty or not exposed "in the feed" mark table columns the JSON leaves out (API names, images).
 
 Slug 404s: `the-dock`, `menu-bar-extras`, `status-bar-extras`. Menu bar extras are a section of `the-menu-bar` (anchor `#Menu-bar-extras`). Dock guidance exists only as `dock-menus` (200).
 
@@ -31,6 +31,8 @@ Source: https://developer.apple.com/design/human-interface-guidelines/typography
 | Footnote | Regular | 10 | 13 | Semibold |
 | Caption 1 | Regular | 10 | 13 | Medium |
 | Caption 2 | Medium | 10 | 13 | Semibold |
+
+The `SKILL.md` scale takes the emphasised weight for Title 1 and Title 2 (700) and Subheadline (600), the default for Title 3 (400), Headline (700) and Callout (400), and both for Body (400; emphasised row titles 600).
 
 ### macOS tracking values (size pt -> tracking in 1/1000 em / points)
 6: +41/+0.24; 7: +34/+0.23; 8: +26/+0.21; 9: +19/+0.17; 10: +12/+0.12; 11: +6/+0.06; 12: 0/0.0; 13: -6/-0.08; 14: -11/-0.15; 15: -16/-0.23; 16: -20/-0.31; 17: -26/-0.43; 18: -25/-0.44; 19: -24/-0.45; 20: -23/-0.45; 21: -18/-0.36; 22: -12/-0.26; 23: -4/-0.10; 24: +3/+0.07; 25: +6/+0.15; 26: +8/+0.22; 27: +11/+0.29; 28: +14/+0.38; 29: +14/+0.40; 30: +14/+0.40; 31: +13/+0.39; 32: +13/+0.41; 33: +12/+0.40; 34: +12/+0.40; 35: +11/+0.38; 36: +10/+0.37; 37: +10/+0.36; 38: +10/+0.37; 39: +10/+0.38; 40: +10/+0.37; 41: +9/+0.36; 42: +9/+0.37; 43: +9/+0.38; 44: +8/+0.37; 45: +8/+0.35; 46: +8/+0.36; 47: +8/+0.37; 48: +8/+0.35; 49: +7/+0.33; 50: +7/+0.34; 51: +7/+0.35; 52: +6/+0.31; 53: +6/+0.33; 54: +6/+0.32; 56: +6/+0.30; 58: +5/+0.28; 60: +4/+0.26; 62: +4/+0.24; 64: +4/+0.22; 66: +3/+0.19; 68: +2/+0.17; 70: +2/+0.14; 72: +2/+0.14; 76: +1/+0.07; 80-96: 0/0.
@@ -69,8 +71,7 @@ Source: https://developer.apple.com/design/human-interface-guidelines/sidebars
 - "Consider automatically hiding and revealing a sidebar when its container window resizes."
 - "Avoid putting critical information or actions at the bottom of a sidebar."
 - "Let people customize the contents of a sidebar" when possible.
-- Sidebars float above content (Liquid Glass layer); extend visually rich content beneath.
-  - Observed on macOS 27.0.1 (an `NSSplitViewController` sidebar captured as the key window with `scripts/native-window.swift`): the sidebar runs flush to the window's top, left and bottom edges, with no inset or rounded panel and no right border; the toolbar sits over the content column with a hairline under it. Build to the capture, not to the "float" wording.
+- Placement (macOS 27.0.1, `NSSplitViewController` key window from `scripts/native-window.sh`): the sidebar is flush and full height, touching the window's top, leading and bottom edges, with no inset, rounded panel or trailing border; the toolbar sits over the content column with a hairline under it. Build to the native capture. Extend visually rich content beneath the sidebar.
 
 ---
 ## 5. Split views (macOS)

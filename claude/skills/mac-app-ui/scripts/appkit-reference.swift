@@ -1,9 +1,15 @@
 // Renders real AppKit controls in light and dark appearance, as a visual reference for the
-// webview's controls. Usage: swift scripts/appkit-reference.swift <out-dir>
+// webview's controls. Renders offscreen; it captures no screen content.
+//
+// Usage: swift scripts/appkit-reference.swift <out-dir>
+// Writes <out-dir>/ak-<light|dark>-<control>.png for push, default, popup, pulldown, field, search,
+// segmented, switch, check-on, check-off, check-mixed, radio-on, radio-off, toolbar-button and
+// plus-minus. Creates <out-dir> when it is missing.
 
 import AppKit
 
 let outDir = URL(fileURLWithPath: CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : ".")
+try! FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
 
 func controls() -> [(String, NSView)] {
     let push = NSButton(title: "Replace Token…", target: nil, action: nil)
@@ -15,6 +21,10 @@ func controls() -> [(String, NSView)] {
 
     let popUp = NSPopUpButton(frame: .zero, pullsDown: false)
     popUp.addItems(withTitles: ["Work", "Personal", "Corp GitLab"])
+
+    // A pull-down shows its first item as the fixed title.
+    let pullDown = NSPopUpButton(frame: .zero, pullsDown: true)
+    pullDown.addItems(withTitles: ["Sort By", "Name", "Date Modified", "Size"])
 
     let field = NSTextField(string: "")
     field.placeholderString = "github_pat_…"
@@ -37,6 +47,11 @@ func controls() -> [(String, NSView)] {
     checkMixed.allowsMixedState = true
     checkMixed.state = .mixed
 
+    let radioOn = NSButton(radioButtonWithTitle: "Every Hour", target: nil, action: nil)
+    radioOn.state = .on
+    let radioOff = NSButton(radioButtonWithTitle: "Every Day", target: nil, action: nil)
+    radioOff.state = .off
+
     let toolbarStyle = NSButton(title: "", image: NSImage(systemSymbolName: "arrow.clockwise", accessibilityDescription: nil)!, target: nil, action: nil)
     toolbarStyle.bezelStyle = .toolbar
 
@@ -44,9 +59,10 @@ func controls() -> [(String, NSView)] {
     plusMinus.segmentStyle = .smallSquare
 
     return [
-        ("push", push), ("default", defaultButton), ("popup", popUp), ("field", field),
-        ("search", search), ("segmented", segmented), ("switch", toggle),
+        ("push", push), ("default", defaultButton), ("popup", popUp), ("pulldown", pullDown),
+        ("field", field), ("search", search), ("segmented", segmented), ("switch", toggle),
         ("check-on", checkOn), ("check-off", checkOff), ("check-mixed", checkMixed),
+        ("radio-on", radioOn), ("radio-off", radioOff),
         ("toolbar-button", toolbarStyle), ("plus-minus", plusMinus),
     ]
 }
@@ -80,4 +96,4 @@ let app = NSApplication.shared
 app.setActivationPolicy(.prohibited)
 render(dark: false)
 render(dark: true)
-print("done")
+print("Wrote \(outDir.path)/ak-<light|dark>-<control>.png")

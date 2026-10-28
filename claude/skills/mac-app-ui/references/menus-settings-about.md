@@ -9,15 +9,25 @@ Every app with a Dock icon sets its own menu bar:
 - **App:** About <App> (own group), Settings… ⌘,, Services, Hide <App>, Hide Others, Show All, Quit <App>.
 - **File:** the document commands the app has (New, Open, Close ⌘W).
 - **Edit:** Undo, Redo, Cut, Copy, Paste, Delete, Select All, Find.
-- **View:** Show Sidebar or Hide Sidebar (the title reflects the current state), Enter Full Screen, and the zoom items in webview apps.
+- **View:** Show Sidebar or Hide Sidebar (the title reflects the current state), Enter Full Screen, and in webview apps Actual Size, Zoom In and Zoom Out (Zoom below).
 - **Window:** Minimize, Zoom, Bring All to Front.
 - **Help:** "<App> Help", opening the app's docs or README URL.
 
 Every toolbar and context-menu command also has a menu-bar item. Unavailable items stay in place, dimmed.
 
-- Tauri: build the menu in Rust with `tauri::menu` (`SubmenuBuilder`, `PredefinedMenuItem`), set it on the app, and emit custom items to the focused window. In a WKWebView probe the page received ⌘ key events before the menu, and calling `preventDefault` on a handled key also stopped the menu item firing. Give each shortcut one owner: the menu item, or the page handler that calls `preventDefault`.
+- Tauri: build the menu in Rust with `tauri::menu` (`SubmenuBuilder`, `PredefinedMenuItem`), set it on the app, and emit custom items to the focused window. In WKWebView the page receives ⌘ key events before the menu, and a page handler that calls `preventDefault` stops the menu item firing (macOS 27.0.1). Give each shortcut one owner: the menu item, or the page handler that calls `preventDefault`.
 - Electron: `Menu.setApplicationMenu(Menu.buildFromTemplate(…))` with `role`s for standard items (`appMenu`, `editMenu`, `viewMenu`, `windowMenu`, `help`); custom items go over IPC through the preload.
 - SwiftUI: `.commands { CommandGroup(…) }` for every main action with its shortcut; the toolbar and the menu share the same enabled rules. Help: replace `.help` with one "<App> Help" item that calls `openURL`, unless the app ships a Help Book.
+
+Shortcuts: standard items keep the standard shortcuts in `hig-macos.md` → Keyboards (a selection; the full table is at https://developer.apple.com/design/human-interface-guidelines/keyboards). Give a custom command ⌘ or ⇧⌘ on a letter whose ⌘ and ⇧⌘ forms are both free of standard shortcuts, or no ⌘ chord; Control is a modifier to avoid. A standard shortcut plus a modifier reads as a variant of the standard command: ⇧⌘E, ⇧⌘B and ⇧⌘U build on ⌘E (Use Selection for Find), ⌘B (Bold) and ⌘U (Underline).
+
+## Zoom
+
+Webview apps zoom from three View menu items, and these items own the shortcuts: Actual Size ⌘0, Zoom In ⌘=, Zoom Out ⌘−. Each acts on the focused window, and every window with app content (main windows, Settings) responds. Menu-bar popovers have no zoom.
+
+- Tauri: `MenuItem`s with accelerators `CmdOrCtrl+0`, `CmdOrCtrl+=` and `CmdOrCtrl+-`. The menu-event handler finds the focused window (`app.webview_windows()` and `is_focused()`; `get_focused_window` needs the `unstable` feature), steps a per-window factor kept in managed state through fixed levels (for example 0.75, 0.85, 1, 1.15, 1.3, 1.5, 1.75, 2), and calls `WebviewWindow::set_zoom` from Rust. Tauri has no zoom getter, so the state is the source of truth.
+- Tauri: `zoomHotkeysEnabled` stays off (its default). On macOS and Linux it injects a page script (tauri 2.12.5 `src/webview/scripts/zoom-hotkey.js`) that handles ⌘ with `-`, `=`, `+` and `0` in its own 0.2 steps and doesn't call `preventDefault`, so the menu item fires too and two handlers track two zoom levels. On Windows it turns on WebView2's built-in zoom keys (tauri-utils 2.10.2 `config.rs`).
+- Electron: the `resetZoom`, `zoomIn` and `zoomOut` menu-item roles own the zoom shortcuts (Electron 42 `electron.d.ts`); put them in the View menu.
 
 ## Context menus
 
@@ -82,4 +92,5 @@ Follow the icon design system the user names. By default it is the one at https:
 - Title Case: buttons, menu items, window and tab titles, column headings, toolbar item labels.
 - Sentence case: labels, help text, descriptions, alert informative text.
 - "…" ends a command that needs more input before it completes.
-- Every icon-only control has an accessibility label; status pairs colour with a shape or a word; the keyboard reaches every control.
+- Every icon-only control has an accessibility label (webview: `webview.md` → Icons; SwiftUI: `swiftui.md` → Wiring traps); status pairs colour with a shape or a word; the keyboard reaches every control.
+- Empty states: a title, one line, and the action that fills the view; when content arrives by itself (for example, by copying), the line says how.

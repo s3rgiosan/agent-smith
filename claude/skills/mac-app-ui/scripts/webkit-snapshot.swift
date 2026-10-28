@@ -3,7 +3,8 @@
 // Chromium preview cannot show.
 //
 // Usage: swift scripts/webkit-snapshot.swift <url> <width> <height> <out.png> <light|dark> [script]
-// The optional script runs after load, for example to open a sheet or read computed styles; its result is printed.
+// The optional script runs once, 1.2 s after load, and its result is printed. Use it to read values such as
+// computed styles; open sheets and other surfaces through the app's preview URLs.
 
 import AppKit
 import WebKit
