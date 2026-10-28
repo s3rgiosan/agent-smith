@@ -70,6 +70,7 @@ Source: https://developer.apple.com/design/human-interface-guidelines/sidebars
 - "Avoid putting critical information or actions at the bottom of a sidebar."
 - "Let people customize the contents of a sidebar" when possible.
 - Sidebars float above content (Liquid Glass layer); extend visually rich content beneath.
+  - Observed on macOS 27.0.1 (an `NSSplitViewController` sidebar captured as the key window with `scripts/native-window.swift`): the sidebar runs flush to the window's top, left and bottom edges, with no inset or rounded panel and no right border; the toolbar sits over the content column with a hairline under it. Build to the capture, not to the "float" wording.
 
 ---
 ## 5. Split views (macOS)

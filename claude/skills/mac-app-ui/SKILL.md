@@ -42,13 +42,16 @@ Terminal-like apps lack hierarchy, not size: four or more sizes per screen, noth
 
 References: `references/webview.md` (Tauri, Electron), `references/swiftui.md`, `references/menus-settings-about.md` (menus, menu-bar extra, Settings, About, app icon, alerts, wording), `references/hig-macos.md` (sourced HIG facts).
 
-## Step 3: verify
+## Step 3: verify before handing over
+
+The app goes to the user for testing only with a complete conformance table that has no "Doesn't" rows.
 
 You run (from the skill's base directory; needs Xcode command line tools):
-1. Build, launch, then `swift <skill-dir>/scripts/webkit-snapshot.swift <url> <w> <h> <out.png> <light|dark> "<js>"` per screen at the minimum window size, both themes; read the PNGs. Pass: builds, nothing clipped, legible. Compare controls with `swift <skill-dir>/scripts/appkit-reference.swift <out-dir>`.
+1. Build, launch, then `swift <skill-dir>/scripts/webkit-snapshot.swift <url> <w> <h> <out.png> <light|dark> "<js>"` per screen at the minimum window size, both themes; read the PNGs. Pass: builds, nothing clipped, legible.
 2. Pass `[...new Set([...document.querySelectorAll('body *')].map(e => getComputedStyle(e).fontSize))].join()` as `<js>`; it prints. Pass: four+ sizes, none under 11px.
 3. Hex grep. Pass: token block only.
 4. Check config keys and APIs in installed source or docs. Pass: each cited or reported unverified.
+5. Conformance table. Rows: every surface (window chrome, toolbar, sidebar, lists, detail panes, sheets and dialogs, alerts and errors, Settings, About, menus, context menus, status item) and every control type on them (push, default, pop-up, field, search, checkbox, radio, segmented, switch). Render native controls with `swift <skill-dir>/scripts/appkit-reference.swift <out-dir>` and compare each control's snapshot in the same appearance: shape, fill, border, height, corner radius, font. Capture a native key window with `sh <skill-dir>/scripts/native-window.sh <out-dir>` and compare window chrome, sidebar and toolbar against it; build to the capture when it differs from HIG wording. Columns: element, Follows / Partly / Doesn't, evidence (file:line or PNG), source (`hig-macos.md` section or HIG URL). Fix every Doesn't, re-snapshot, and put the table in the handoff.
 
 The user confirms:
 - VoiceOver (⌘F5) announces every control in the main flow.
@@ -70,3 +73,4 @@ The user confirms:
 | "Dynamic Type" on macOS | Fixed styles plus zoom. |
 | Global `user-select: none` | Chrome only. |
 | Config claims from memory | Check installed source. |
+| Handing over with controls never compared to AppKit | Conformance table first. |
