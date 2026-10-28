@@ -1,6 +1,10 @@
 # Claude Code Spinner Verbs
 
+Part of [Agent Smith](../../README.md): tools, scripts and skills for agent-driven development.
+
 Make the wait fun. Spinner verbs are the action phrases Claude Code shows while it works ("Using the Force for 12s"), and these themes swap the defaults for something with more character.
+
+---
 
 ## Available Themes
 
@@ -11,6 +15,8 @@ Make the wait fun. Spinner verbs are the action phrases Claude Code shows while 
 | Pirate | `pirate.json` | 30 |
 | Portuguese | `portuguese.json` | 38 |
 | Hugo (TV Game) | `hugo.json` | 8 |
+
+---
 
 ## Usage
 
@@ -41,3 +47,9 @@ To switch modes, change the `"mode"` value in the JSON before pasting.
   }
 }
 ```
+
+---
+
+## License
+
+[MIT](../../LICENSE)

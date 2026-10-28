@@ -1,6 +1,17 @@
 # Claude Scripts
 
+Part of [Agent Smith](../../README.md): tools, scripts and skills for agent-driven development.
+
 Shell scripts that keep Claude Code installations running smoothly: a status line worth looking at, installers for this repo's commands and skills, and a manager for the projects a Claude home collects.
+
+Each script runs in place from a clone of the repo and prints its flags with `--help`. Every script also has an extensionless symlink (`claude_statusline`, `install_claude_commands`, `install_claude_skills`, `manage_claude_projects`) that runs it.
+
+```bash
+git clone https://github.com/s3rgiosan/agent-smith.git
+cd agent-smith/claude/scripts
+```
+
+---
 
 ## `claude_statusline.sh`
 
@@ -65,6 +76,8 @@ The line shows up on the next update (a reply, a mode change, `/compact`). Edits
 
 Needs `jq`, a [Nerd Font](https://www.nerdfonts.com/) for the icons and a truecolor terminal for the colours.
 
+---
+
 ## `install_claude_commands.sh`
 
 Installs the slash commands from `claude/commands/` into a Claude home, so they show up as `/<name>` in every session.
@@ -104,6 +117,8 @@ Flags:
 
 `README.md` in the commands directory is skipped. A new session (or restart) is needed before Claude Code picks up newly installed commands.
 
+---
+
 ## `install_claude_skills.sh`
 
 Installs the skills from `claude/skills/` into a Claude home. A skill is a directory containing a `SKILL.md`; each such directory is installed as `<claude_home>/skills/<name>`.
@@ -142,6 +157,8 @@ Flags:
 | `--help` | Show usage |
 
 Only subdirectories with a `SKILL.md` are installed. A new session (or restart) is needed before Claude Code picks up newly installed skills.
+
+---
 
 ## `manage_claude_projects.sh`
 
@@ -217,3 +234,23 @@ Behavior notes:
 - Sessions are UUID-named top-level entries of a project folder: `<uuid>.jsonl` files and `<uuid>/` dirs.
 - Requires `python3`. Works with bash 3.2 (macOS) and BSD or GNU `sed`.
 - The list renders inline (no alternate screen). Terminal state is restored on normal exit, `Ctrl-C`, or `SIGTERM`.
+
+---
+
+## What's Inside
+
+```
+scripts/
+├── README.md                     ← you are here
+├── claude_statusline.sh          ← three-row powerline status line
+├── install_claude_commands.sh    ← installs claude/commands/ into a Claude home
+├── install_claude_skills.sh      ← installs claude/skills/ into a Claude home
+├── manage_claude_projects.sh     ← moves and purges a Claude home's projects
+└── <name>                        ← extensionless symlink to each <name>.sh
+```
+
+---
+
+## License
+
+[MIT](../../LICENSE)

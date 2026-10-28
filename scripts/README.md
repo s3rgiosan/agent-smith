@@ -1,6 +1,10 @@
 # Scripts
 
-Standalone shell scripts for the chores that pile up around agent-driven work.
+Part of [Agent Smith](../README.md): tools, scripts and skills for agent-driven development.
+
+Standalone shell scripts for the chores that pile up around agent-driven work. Each runs in place from a clone of the repo and needs only Bash and standard Unix tools.
+
+---
 
 ## `update_wiki_paths.sh`
 
@@ -29,3 +33,9 @@ Flags:
 | `--yes` | Skip the confirmation prompt; needed when there is no terminal and `--backup` is off |
 | `--no-tilde` | Skip the extra `~/foo` pass (on by default when `--old` is inside `$HOME`) |
 | `--help` | Show usage |
+
+---
+
+## License
+
+[MIT](../LICENSE)
