@@ -1,67 +1,81 @@
 # Webview apps (Tauri 2, Electron)
 
-A webview renders CSS pixels at 1 px = 1 pt on macOS at 100% zoom, so native point sizes carry over exactly. What makes webview apps feel "small" or "like a terminal" is a flat scale (everything 13px or less), all-caps tracked labels, monospace numbers and tight rows — not the base size itself.
+A webview renders 1 CSS px as 1 pt at 100% zoom, so the type scale in `SKILL.md` applies in px. Menus, Settings, About, alerts and the menu-bar extra are in `menus-settings-about.md`.
 
 ## Type
 
-System font only: `font-family: system-ui, -apple-system, sans-serif;` (no named "SF Pro" files). Map Apple's macOS text styles (`hig-macos.md` → Typography) to roles:
+- `font-family: system-ui, -apple-system, sans-serif;` with no font files.
+- Weights 600 and 700 in the scale are the HIG emphasised weights of Title 1, Title 2, Body and Subheadline; Headline is Bold by default (`hig-macos.md` → Typography).
+- Numbers in columns: `font-variant-numeric: tabular-nums;`. `ui-monospace` for code, paths and command output.
+- Zoom in every window with app content: Tauri `"zoomHotkeysEnabled": true` on the window plus the `core:webview:allow-set-webview-zoom` permission (core defaults leave it out); Electron the View menu's `zoomIn`, `zoomOut` and `resetZoom` roles. Menu-bar popovers have no zoom.
 
-| Role | Style | Size / line height | Weight |
-|---|---|---|---|
-| Window or detail title | Title 1 | 22 / 26 | 700 |
-| Pane or section title | Title 2 | 17 / 22 | 600 |
-| Primary content: list row titles, detail text, reading text | Title 3 | 15 / 20 | 400 (600 when emphasised) |
-| Controls, buttons, form labels, sidebar items, menus-in-page | Body | 13 / 16 | 400 |
-| Group headers in lists and tables | Headline | 13 / 16 | 700, Title Case, no tracking |
-| Sidebar section headers (house judgment; the HIG only asks for succinct labels) | Subheadline | 11 / 14 | 600, Title Case, secondary label colour |
-| Secondary metadata: dates, counts, subtitles | Callout | 12 / 15 | 400, secondary label colour |
-| Badges, tiny counts only | Subheadline | 11 / 14 | 400 |
+## Sizes
 
-- Nothing below 11px (house rule; Apple's minimum is 10pt).
-- Numbers in columns: `font-variant-numeric: tabular-nums;` in the system font, not monospace.
-- Monospace (`ui-monospace`) only for code, paths and command output.
-- Row heights follow the text: a list row with a Title 3 title and a Callout subtitle is about 44–52px; a single-line sidebar row about 28px.
-- Starting sizes (house defaults; the HIG states none): toolbar 52px, sidebar 220px, content list 320px, detail flexible with a ~640px reading column, controls 28px tall (the macOS default control size, `hig-macos.md` → Layout).
-- Offer zoom in apps with a main window: Tauri `"zoomHotkeysEnabled": true` on the window plus the `core:webview:allow-set-webview-zoom` permission (core defaults don't include it); Electron handles ⌘+/⌘− via the View menu's zoom roles. Menu-bar popovers skip zoom.
+- Controls: 24px tall at regular size, 28px at large, as AppKit push buttons, text fields and pop-up buttons. Pad each clickable target to at least 28×28px (`hig-macos.md` → Accessibility).
+- Rows: single-line 24–28px (an AppKit table row is 24pt); a 13px title over 12px metadata about 44px.
+- Starting layout (house defaults): toolbar 52px, sidebar 220px, content list 320px, detail flexible with a reading column of about 640px.
+- Minimum window size: every main window sets one in config (Tauri window `minWidth`/`minHeight`; Electron `BrowserWindow` `minWidth`/`minHeight`). Step 3 snapshots run at it.
+- Window state: restore size and position (Tauri `tauri-plugin-window-state`; Electron `win.getBounds()` saved in the settings store), plus sidebar width and the selection.
 
 ## Colour
 
-- Define tokens on `:root`, override under `@media (prefers-color-scheme: dark)`, and set `color-scheme: light dark`.
-- WebKit's semantic colours work in Tauri on macOS behind a feature check: `@supports (color: -apple-system-label) { … -apple-system-label, -apple-system-secondary-label, -apple-system-separator, -apple-system-window-background, -apple-system-control-background, -apple-system-red, -apple-system-green, -apple-system-orange … }`. Keep literal fallbacks outside the `@supports`. They are WebKit-only: Electron (Chromium) uses the literal light/dark tokens.
-- Status colours: the system red/green/orange (above) where available; literal fallbacks darkened in light mode so icons reach 3:1. Status always pairs colour with a shape and a word.
-- **The user's accent colour:** the CSS `AccentColor` keyword is a fixed blue in Safari 16.5+ and Chrome 149+ (MDN browser-compat-data), so it does not follow System Settings. Read the real value natively and push it into a CSS variable:
-  - Electron: `systemPreferences.getAccentColor()` (macOS, Windows) from the main process, sent to the renderer through the preload; re-read on window focus and `nativeTheme` `updated` (the `accent-color-changed` event isn't relied on for macOS).
-  - Tauri: read `NSColor.controlAccentColor` in Rust (objc2-app-kit, `NSColor` + `NSColorSpace` features) converted to sRGB, and emit it to the webview; re-read on app activation and appearance change, since it's a dynamic colour.
-  - Verify in the running app by switching the accent and appearance in System Settings.
-- Text on the accent: white, as macOS does; when white on the accent is under 4.5:1 (the default blue `#007aff` is about 4.0:1), darken the fill until it passes. Don't use `AccentColorText` (fixed black in WebKit).
-- Contrast: 4.5:1 for text under 18pt, 3:1 for 18pt+ and for icons/control borders, in both themes (`hig-macos.md` → Accessibility, Color).
+Tokens on `:root`, dark values under `@media (prefers-color-scheme: dark)`, and `color-scheme: light dark`. Every literal colour lives in this block.
 
-## Window chrome (macOS)
+**Tauri (WKWebView).** WebKit's semantic colours go inside `@supports (color: -apple-system-label) { … }`, literal fallbacks outside it:
 
-- Tauri: `"titleBarStyle": "Overlay"`, `"hiddenTitle": true`, `"transparent": true`, `"windowEffects": { "effects": ["sidebar"], "state": "followsWindowActiveState" }` (menu-bar popovers: `"effects": ["popover"]`). Mac-only apps put these in `tauri.conf.json`. Cross-platform apps put them in `src-tauri/tauri.macos.conf.json` so other platforms keep normal windows.
-  - A platform file's `app.windows` array **replaces** the base array (RFC 7396 merge in tauri-utils), so repeat the full window object (label, title, sizes, zoom).
-  - `macOSPrivateApi` is a no-op since Tauri 2.12.1 (tauri `src/lib.rs` docs); don't add it.
-  - Drag regions need `data-tauri-drag-region` and the `core:window:allow-start-dragging` permission. With an Overlay title bar the window can't be dragged while unfocused (tauri#4316).
-  - Pad the sidebar top so content clears the traffic lights; keep content panes opaque; honour `prefers-reduced-transparency`.
-- Electron: `titleBarStyle: 'hiddenInset'`, `vibrancy: 'sidebar'` (or `'under-window'`), drag via `-webkit-app-region: drag` with controls set to `no-drag`.
+| Token | WebKit colour | Fallback light | Fallback dark |
+|---|---|---|---|
+| Window and content background | `-apple-system-background` | `#ffffff` | `#1e1e1e` |
+| Label | `-apple-system-label` | `rgb(0 0 0 / 0.847)` | `rgb(255 255 255 / 0.847)` |
+| Secondary label | `-apple-system-secondary-label` | `rgb(0 0 0 / 0.498)` | `rgb(255 255 255 / 0.549)` |
+| Separator | `-apple-system-separator` | `rgb(0 0 0 / 0.098)` | `rgb(255 255 255 / 0.098)` |
+| Selection, list focused | `-apple-system-selected-content-background` | `#0064e1` | `#0059d1` |
+| Selection, list unfocused | `-apple-system-unemphasized-selected-content-background` | `#dcdcdc` | `#464646` |
+| Status | `-apple-system-red`, `-apple-system-green`, `-apple-system-orange` | | |
 
-## Menus, Settings, About
+Fallbacks are `NSColor` values on macOS 27. There, `-apple-system-control-background` and `-apple-system-secondary-background` resolve to the same value as `-apple-system-background`, which matches `NSColor.windowBackgroundColor`.
 
-- **App menu bar.**
-  - Tauri: build it in Rust with `tauri::menu` (`SubmenuBuilder`, `PredefinedMenuItem`, `AboutMetadata`), set it on the app, and emit custom items to the focused window. The page receives ⌘ key events before the menu does; calling `preventDefault` on a handled key stops the menu firing too (wry 0.57). Never handle the same shortcut in both places without that guard.
-  - Electron: `Menu.setApplicationMenu(Menu.buildFromTemplate(…))` with `role`s for standard items; send custom items over IPC through a preload and handle them in the renderer.
-- **Settings window.** A second window (Tauri `WebviewWindowBuilder` with label `settings`; Electron a second `BrowserWindow`), not resizable, centred, routed by label or hash; opening it again focuses the existing one. Persist settings in one store every window reads — the backend (a settings file the main process owns) or `localStorage` with the `storage` event — and apply changes in every window when they change. Give it its own capability with only the permissions it uses (Tauri).
-- **About.** Tauri `AboutMetadata { name, version, short_version: Some(String::new()), copyright, credits, .. }` (the empty `short_version` keeps the version from showing twice); Electron `app.setAboutPanelOptions({ applicationName, applicationVersion, copyright, credits })` — check in the running app that the version doesn't show twice. Use the product name, not the package name. The icon comes from the app bundle.
-- **Menu-bar extra (Tauri).** Tray icon as a black-and-clear template image (`icon_as_template(true)`), `ActivationPolicy::Accessory` for menu-bar-only apps, `show_menu_on_left_click(false)` when a left click opens a popover window; the popover hides on blur and Escape. Under the Accessory policy a new window may not receive keyboard focus, so switch to `Regular` while the Settings window is open and back to `Accessory` when it closes.
+**Electron (Chromium).** Read the same colours in the main process with `systemPreferences.getColor()`: `window-background`, `control-background`, `label`, `secondary-label`, `separator`, `selected-content-background`, `unemphasized-selected-content-background` (each returns `#RRGGBBAA`). Send them to the renderer through the preload, set them as CSS variables, and re-read them on `nativeTheme` `updated` and on window `focus`.
+
+**The user's accent.**
+- Tauri: use `-apple-system-control-accent`. Verify it follows by switching the accent in System Settings with the app running. If it stays blue, read `NSColor.controlAccentColor` in Rust (objc2-app-kit 0.3, features `NSColor` and `NSColorSpace`), convert it to sRGB, emit it to the webview, and re-read it on app activation and appearance change.
+- Electron: `systemPreferences.getAccentColor()` (documented for macOS 10.14+) in the main process, sent through the preload; re-read on window `focus`.
+- The CSS `AccentColor` keyword is a fixed blue in Safari 16.5+ and Chrome 149+ and unsupported in older Chromium (MDN browser-compat-data). `AccentColorText` resolves to black in WKWebView. Use the native read above.
+
+**Selection.** List rows take the selection tokens:
+
+```css
+.list [aria-selected="true"] { background: var(--selection); color: var(--selection-text); }
+.list:not(:focus-within) [aria-selected="true"],
+:root.window-inactive .list [aria-selected="true"] { background: var(--selection-unfocused); color: var(--label); }
+```
+
+`--selection-text` is white. Toggle `window-inactive` on window `blur`/`focus` and `visibilitychange`. Text and search fields keep the system focus ring.
+
+**Status.** System red, green and orange, each paired with a shape and a word.
+
+## Window chrome
+
+- **Default:** the standard title bar and an opaque window background, which is each stack's default window config (HIG: avoid custom window UI).
+- **Sidebar layouts:** overlay title bar with the `sidebar` material.
+  - Tauri: `"titleBarStyle": "Overlay"`, `"hiddenTitle": true`, `"transparent": true`, `"windowEffects": { "effects": ["sidebar"], "state": "followsWindowActiveState" }`. Mac-only apps put these in `tauri.conf.json`; cross-platform apps in `src-tauri/tauri.macos.conf.json`. A platform file's `app.windows` array replaces the base array (RFC 7396 merge in tauri-utils), so repeat the full window object. `macOSPrivateApi` is a no-op since Tauri 2.12.1 (tauri `src/lib.rs` docs), so leave it out.
+  - Tauri drag regions: `data-tauri-drag-region` plus the `core:window:allow-start-dragging` permission. A double-click on a drag region always toggles maximize, whatever the user's title-bar double-click setting (tauri 2.12.5 `src/window/scripts/drag.js`, lines 86–126). An Overlay window can't be dragged while unfocused (tauri#4316).
+  - Electron: `titleBarStyle: 'hiddenInset'`, `vibrancy: 'sidebar'`; drag with `app-region: drag` and `app-region: no-drag` on controls.
+  - Then: put the window title (short, not the app name) in the toolbar's leading zone; pad the sidebar top to clear the traffic lights; keep content panes opaque; dim custom chrome under `:root.window-inactive`; drop the traffic-light padding in full screen (Tauri: on `WindowEvent::Resized` read `window.is_fullscreen()` and emit it; Electron: `enter-full-screen` and `leave-full-screen`).
+- **Reduce Transparency:** `prefers-reduced-transparency` never matches in WKWebView. Read `NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency` natively and set a root class that gives the sidebar an opaque background.
+- **Reduce Motion:** `@media (prefers-reduced-motion: reduce)` works; spinners and transitions stop or become fades.
 
 ## Behaviour
 
-- Selection: accent fill with readable text while the list has focus; `--selection-inactive` grey when focus is elsewhere or the window is inactive (toggle a root class on window `blur`/`focus` and `visibilitychange`).
-- Focus: `:focus-visible { outline: auto; }` gives WebKit's platform ring; don't draw custom rings.
-- Keyboard: inside text fields on macOS only Escape and ⌘ chords may trigger app actions; Ctrl+A/E/F/B/N/P/D/K are text-editing keys there.
-- Text selection: `user-select: none` on chrome only (toolbars, sidebar labels); content, names and errors stay selectable.
-- Dialogs: `<dialog>` with `showModal()`; return focus to the opener on close.
-- Lists: `role="listbox"` with `aria-activedescendant` on a focusable container, options in labelled groups (listbox → group → option only). The container shows no focus ring; the selection highlight is the indicator.
-- Tables (several columns): `role="grid"` with `aria-activedescendant`, sortable headers with `aria-sort` (click again to reverse), resizable columns, arrow/Home/End/Page keys.
-- Motion: spinners and transitions stop or simplify under `@media (prefers-reduced-motion: reduce)`.
-- Cursor: `cursor: default` on controls (macOS uses the arrow), pointer only for real links.
+- **Toolbar** zones: leading (sidebar toggle, title), centre (common controls), trailing (primary action, search field).
+- **Search field:** ⌘F focuses it, Escape clears it, the placeholder names the scope ("Search Notes").
+- **Lists:** `role="listbox"` with `aria-activedescendant` on a focusable container, options in labelled groups (listbox → group → option). Arrow keys move; typing jumps to the first matching row; Delete removes the selection with Undo; when the list takes focus with nothing selected, select the first row. The selection highlight is the focus indicator, so the container has no ring.
+- **Tables:** `role="grid"` with `aria-activedescendant`; sortable headers with `aria-sort` (a second click reverses); resizable columns; arrow, Home, End and Page keys.
+- **Sidebar:** show and hide from a toolbar button and View → Show/Hide Sidebar; icons in the accent colour.
+- **Empty states:** a title, one line, and the action that fills the view. When content arrives by itself (for example, by copying), the line says how.
+- **Icons:** SF Symbols exported as masks. Render each with `NSImage(systemSymbolName:)` and `NSImage.SymbolConfiguration(pointSize:weight:)` at the weight of the adjacent text, at @2x, black on transparent PNG; apply it as `mask-image` over `background-color: currentColor`. Every icon-only control has an `aria-label`.
+- **Focus:** `:focus-visible { outline: auto; }` draws WebKit's platform ring.
+- **Keyboard:** inside text fields, only Escape and ⌘ chords trigger app actions; Ctrl+A/E/F/B/N/P/D/K edit text there.
+- **Text selection:** `user-select: none` on chrome (toolbars, sidebar labels); content, names and errors stay selectable.
+- **Custom sheets:** `<dialog>` with `showModal()`, focus returned to the opener on close. Alerts are native (`menus-settings-about.md` → Alerts).
+- **Cursor:** `cursor: default` on controls; `pointer` on real links only.
