@@ -64,6 +64,10 @@ Install this repo's commands and skills into a Claude home. Symlinks by default,
 
 An interactive list of every project a Claude home knows about, to move a project to a new path or purge it, with sessions, memory, config and prompt history kept in step.
 
+### [`manage_claude_spinner_verbs.sh`](./claude/scripts/README.md#manage_claude_spinner_verbssh)
+
+Sets spinner verb themes in a Claude Code settings file from a menu or with flags: use a theme, stack themes, add your own phrases, switch the mode, or remove them. A `SessionStart` hook can rotate the theme once a day.
+
 **[→ Claude scripts README](./claude/scripts/README.md)**
 
 ---
@@ -102,7 +106,7 @@ cd agent-smith/claude/scripts
 ./install_claude_skills.sh --claude ~/.claude-work
 ```
 
-Start a new session after installing so Claude Code picks up the new commands and skills. The status line is set in a Claude home's `settings.json` (see the [Claude scripts README](./claude/scripts/README.md#set-it-up)), and spinner verbs are merged into it (see the [spinner verbs README](./claude/spinner-verbs/README.md#usage)).
+Start a new session after installing so Claude Code picks up the new commands and skills. The status line is set in a Claude home's `settings.json` (see the [Claude scripts README](./claude/scripts/README.md#set-it-up)), and `manage_claude_spinner_verbs.sh` writes spinner verbs into it (see the [spinner verbs README](./claude/spinner-verbs/README.md#usage)).
 
 ---
 
@@ -111,7 +115,7 @@ Start a new session after installing so Claude Code picks up the new commands an
 - [Claude Code](https://claude.ai/code).
 - Bash (macOS, Linux, or WSL on Windows) for the shell scripts.
 - `jq`, a [Nerd Font](https://www.nerdfonts.com/) and a truecolor terminal for `claude_statusline.sh`.
-- `python3` for `manage_claude_projects.sh`.
+- `python3` for `manage_claude_projects.sh` and `manage_claude_spinner_verbs.sh`.
 - macOS with the Xcode command line tools for the `mac-app-ui` verification scripts.
 
 ---

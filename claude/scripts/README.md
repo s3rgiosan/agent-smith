@@ -2,9 +2,9 @@
 
 Part of [Agent Smith](../../README.md): tools, scripts and skills for agent-driven development.
 
-Shell scripts that keep Claude Code installations running smoothly: a status line worth looking at, installers for this repo's commands and skills, and a manager for the projects a Claude home collects.
+Shell scripts that keep Claude Code installations running smoothly: a status line worth looking at, installers for this repo's commands and skills, a manager for the projects a Claude home collects, and a picker for spinner verb themes.
 
-Each script runs in place from a clone of the repo and prints its flags with `--help`. Every script also has an extensionless symlink (`claude_statusline`, `install_claude_commands`, `install_claude_skills`, `manage_claude_projects`) that runs it.
+Each script runs in place from a clone of the repo and prints its flags with `--help`. Every script also has an extensionless symlink (`claude_statusline`, `install_claude_commands`, `install_claude_skills`, `manage_claude_projects`, `manage_claude_spinner_verbs`) that runs it.
 
 ```bash
 git clone https://github.com/s3rgiosan/agent-smith.git
@@ -235,18 +235,102 @@ Behavior notes:
 - Requires `python3`. Works with bash 3.2 (macOS) and BSD or GNU `sed`.
 - The list renders inline (no alternate screen). Terminal state is restored on normal exit, `Ctrl-C`, or `SIGTERM`.
 
+## `manage_claude_spinner_verbs.sh`
+
+Sets the spinner verbs in a Claude Code settings file from the themes in [`claude/spinner-verbs/`](../spinner-verbs/README.md), so no JSON gets edited by hand. Run it with no flags for a menu, or use flags in scripts.
+
+The menu asks for a settings file, then loops:
+
+| Choice | Action |
+|--------|--------|
+| `1` | Use one or more themes; their verbs replace the current list |
+| `2` | Add one or more themes to the current list |
+| `3` | Remove one or more themes' verbs from the current list |
+| `4` | Add your own phrases, one per line |
+| `5` | Switch the mode between `replace` and `append` |
+| `6` | Show the current verbs |
+| `7` | Remove `spinnerVerbs` from the file |
+| `8` | Turn the daily theme rotation on or off (user settings file only) |
+| `q` | Quit |
+
+Every change prints the before and after counts and asks for confirmation before it writes.
+
+```bash
+# Open the menu
+./manage_claude_spinner_verbs.sh
+
+# Use one theme in ~/.claude/settings.json (or $CLAUDE_CONFIG_DIR)
+./manage_claude_spinner_verbs.sh --use pirate
+
+# Stack a second theme and add a phrase of your own
+./manage_claude_spinner_verbs.sh --add portuguese-football --verb "Brewing a bica"
+
+# Add a theme to the built-in verbs, for you in this project only
+./manage_claude_spinner_verbs.sh --use monty-python --mode append --scope local
+
+# Remove the spinner verbs from ~/.claude/settings.json
+./manage_claude_spinner_verbs.sh --reset
+
+# Rotate all themes, one each day
+./manage_claude_spinner_verbs.sh --install-rotation
+
+# Rotate only two themes
+./manage_claude_spinner_verbs.sh --install-rotation --themes portuguese,portuguese-football
+```
+
+Flags:
+
+| Flag | Description |
+|------|-------------|
+| `--use` | Replace the current verbs with a theme's verbs (repeat to combine themes) |
+| `--add` | Add a theme's verbs to the current verbs (repeatable) |
+| `--remove` | Remove a theme's verbs from the current verbs (repeatable) |
+| `--verb` | Add one phrase of your own (repeatable) |
+| `--mode` | `replace` (only these verbs) or `append` (these plus Claude Code's built-in verbs); default: the current mode, else `replace` |
+| `--reset` | Remove `spinnerVerbs` from the settings file |
+| `--show` | Print the current verbs |
+| `--list` | Print the available themes |
+| `--install-rotation` | Add a `SessionStart` hook that runs `--rotate`, then set the theme of the day (user scope only) |
+| `--remove-rotation` | Remove that hook; the current verbs stay |
+| `--rotate` | Set the theme of the day; the hook runs this, and it prints nothing unless an error occurs |
+| `--themes` | Comma-separated themes for the rotation (default: all themes) |
+| `--scope` | `user` (default): `<claude_home>/settings.json`; `project`: `<dir>/.claude/settings.json`; `local`: `<dir>/.claude/settings.local.json` |
+| `--claude` | Path to the Claude home for the `user` scope (default: `$CLAUDE_CONFIG_DIR` or `~/.claude`) |
+| `--project` | Project directory for the `project` and `local` scopes (default: the current directory) |
+| `--backup` | Save a timestamped copy of the settings file under `<claude_home>/backups/spinner-verbs/` before a change |
+| `--dry-run` | Print the planned change, write nothing |
+| `--yes` | Skip the confirmation prompt |
+| `--help` | Show usage |
+
+Behavior notes:
+
+- A theme is a file name from `claude/spinner-verbs/` without `.json`, or a path to any JSON file in the same format.
+- Duplicate verbs are skipped. A list that ends up empty removes `spinnerVerbs` from the file.
+- Other keys in the settings file are kept. The file is written in one step, with its indent and file mode kept; a symlinked settings file stays a symlink.
+- A settings file that is not valid JSON is left alone. A `spinnerVerbs` with an unexpected shape can only be removed (`--reset`).
+- The script warns when another scope's file also sets `spinnerVerbs`.
+
+Daily rotation:
+
+- `--install-rotation` adds a `SessionStart` hook to `<claude_home>/settings.json`. The hook runs this script from the clone with `--rotate`, so moving or deleting the clone breaks it; run `--install-rotation` again from the new place.
+- Each UTC day shows the next theme, in alphabetical order or in the `--themes` order. Without `--themes`, a new theme file joins the rotation after a `git pull`, and the order shifts.
+- The rotation keeps the current mode, and it writes nothing when the theme of the day is already set.
+- Manual changes in the user settings file last until the next session start, when the hook sets the theme of the day again.
+- Requires `python3`. Works with bash 3.2 (macOS).
+
 ---
 
 ## What's Inside
 
 ```
 scripts/
-├── README.md                     ← you are here
-├── claude_statusline.sh          ← three-row powerline status line
-├── install_claude_commands.sh    ← installs claude/commands/ into a Claude home
-├── install_claude_skills.sh      ← installs claude/skills/ into a Claude home
-├── manage_claude_projects.sh     ← moves and purges a Claude home's projects
-└── <name>                        ← extensionless symlink to each <name>.sh
+├── README.md                      ← you are here
+├── claude_statusline.sh           ← three-row powerline status line
+├── install_claude_commands.sh     ← installs claude/commands/ into a Claude home
+├── install_claude_skills.sh       ← installs claude/skills/ into a Claude home
+├── manage_claude_projects.sh      ← moves and purges a Claude home's projects
+├── manage_claude_spinner_verbs.sh ← sets spinner verb themes in a settings file
+└── <name>                         ← extensionless symlink to each <name>.sh
 ```
 
 ---
