@@ -16,7 +16,7 @@ Skills Claude picks up when a task matches: `grill-me` stress-tests a plan, and 
 
 ## [`scripts/`](./scripts/README.md)
 
-Shell scripts that run Claude Code installations: a status line, installers for the commands and skills, and a manager for moving and purging projects.
+Shell scripts that run Claude Code installations: a status line, installers for the commands and skills, a manager for moving and purging projects, and a picker for spinner verb themes.
 
 ## [`spinner-verbs/`](./spinner-verbs/README.md)
 
@@ -38,7 +38,8 @@ claude/
 │   ├── claude_statusline.sh
 │   ├── install_claude_commands.sh
 │   ├── install_claude_skills.sh
-│   └── manage_claude_projects.sh
+│   ├── manage_claude_projects.sh
+│   └── manage_claude_spinner_verbs.sh
 └── spinner-verbs/
     └── *.json                ← one file per theme
 ```

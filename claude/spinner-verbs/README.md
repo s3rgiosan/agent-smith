@@ -21,6 +21,22 @@ Make the wait fun. Spinner verbs are the action phrases Claude Code shows while 
 
 ## Usage
 
+### With the script
+
+[`manage_claude_spinner_verbs.sh`](../scripts/README.md#manage_claude_spinner_verbssh) writes a theme into a settings file for you. It can also stack themes, add your own phrases, switch the mode, and remove the verbs.
+
+```bash
+cd agent-smith/claude/scripts
+
+# Open the menu
+./manage_claude_spinner_verbs.sh
+
+# Or use flags
+./manage_claude_spinner_verbs.sh --use portuguese --add portuguese-football
+```
+
+### By hand
+
 1. Pick a theme file from this repo
 2. Copy the JSON contents into your Claude Code settings file:
    - **Global** (all projects): `~/.claude/settings.json`
