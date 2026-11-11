@@ -15,6 +15,7 @@ Make the wait fun. Spinner verbs are the action phrases Claude Code shows while 
 | Pirate | `pirate.json` | 30 |
 | Portuguese | `portuguese.json` | 38 |
 | Hugo (TV Game) | `hugo.json` | 8 |
+| Portuguese Football | `portuguese-football.json` | 33 |
 
 ---
 

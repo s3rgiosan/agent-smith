@@ -72,7 +72,7 @@ An interactive list of every project a Claude home knows about, to move a projec
 
 ### [Themes](./claude/spinner-verbs)
 
-Replacement phrases for the ones Claude Code shows while it works: movie quotes, Monty Python, pirate, Portuguese and Hugo.
+Replacement phrases for the ones Claude Code shows while it works: movie quotes, Monty Python, pirate, Portuguese, Hugo and Portuguese football commentary.
 
 **[→ Spinner verbs README](./claude/spinner-verbs/README.md)**
 
