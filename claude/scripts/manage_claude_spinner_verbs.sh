@@ -10,8 +10,9 @@ fi
 # this repo's claude/spinner-verbs/. You do not edit JSON by hand.
 #
 # Use a theme, stack more themes, remove a theme, add your own phrases,
-# switch the mode, or remove the spinner verbs. All other keys in the
-# settings file stay as they are. With no action flags, a menu opens.
+# switch the mode, or remove the spinner verbs. A SessionStart hook can also
+# rotate the theme once a day. All other keys in the settings file stay as
+# they are. With no action flags, a menu opens.
 #
 # Usage:
 #   ./manage_claude_spinner_verbs.sh [--scope <scope>] [--claude <claude_home>]
@@ -24,6 +25,11 @@ fi
 #   ./manage_claude_spinner_verbs.sh --reset [--scope <scope>] [--yes] ...
 #   ./manage_claude_spinner_verbs.sh --show [--scope <scope>]
 #   ./manage_claude_spinner_verbs.sh --list
+#   ./manage_claude_spinner_verbs.sh --install-rotation [--themes LIST]
+#                                    [--claude <claude_home>] [--yes] ...
+#   ./manage_claude_spinner_verbs.sh --remove-rotation [--claude <claude_home>]
+#   ./manage_claude_spinner_verbs.sh --rotate [--themes LIST]
+#                                    [--claude <claude_home>]
 #
 # Examples:
 #   # Open the menu
@@ -41,6 +47,12 @@ fi
 #   # Remove the spinner verbs from ~/.claude/settings.json
 #   ./manage_claude_spinner_verbs.sh --reset
 #
+#   # Rotate all themes, one each day
+#   ./manage_claude_spinner_verbs.sh --install-rotation
+#
+#   # Rotate only two themes
+#   ./manage_claude_spinner_verbs.sh --install-rotation --themes portuguese,portuguese-football
+#
 # Flags:
 #   --use      Replace the current verbs with the verbs of a theme
 #              (repeat to combine themes)
@@ -53,6 +65,14 @@ fi
 #   --reset    Remove spinnerVerbs from the settings file
 #   --show     Print the current verbs, then exit
 #   --list     Print the available themes, then exit
+#   --install-rotation
+#              Add a SessionStart hook that runs --rotate, then set the theme
+#              of the day (user scope only)
+#   --remove-rotation
+#              Remove that hook. The current verbs stay.
+#   --rotate   Set the theme of the day, then exit. This is the command that
+#              the hook runs. It prints nothing unless an error occurs.
+#   --themes   Comma-separated themes for the rotation (default: all themes)
 #   --scope    user (default): <claude_home>/settings.json, for all projects
 #              project: <dir>/.claude/settings.json, shared with the team
 #              local: <dir>/.claude/settings.local.json, for you in one project
@@ -68,6 +88,11 @@ fi
 #
 # THEME is a file name from claude/spinner-verbs/ without ".json", or the
 # path to a JSON file with the same format. Duplicate verbs are skipped.
+#
+# The rotation goes through the themes in alphabetical order (or in the
+# --themes order) and shows each theme for one UTC day. It keeps the current
+# mode. A new theme file joins the rotation when --themes is not set, and
+# then the order changes.
 #
 # Requires python3.
 # =============================================================================
@@ -85,10 +110,18 @@ LIST=false
 BACKUP=false
 DRY_RUN=false
 ASSUME_YES=false
+ROTATE=false
+INSTALL_ROTATION=false
+REMOVE_ROTATION=false
+ROTATION_THEMES=""
+SKIP_ROTATION_WARNING=false
 USE=()
 ADD=()
 REMOVE=()
 VERBS=()
+
+# The first day of the rotation: 2026-11-11, as days since 1970-01-01 (UTC).
+ROTATION_EPOCH_DAY=20768
 
 # Print the physical path of $1, following symlinks (no GNU `readlink -f`).
 # Prints nothing and returns 1 when the path or its parent does not exist.
@@ -159,12 +192,17 @@ tilde() {
 #                     verb per line
 #   plan FILE OP...   print the change that the operations make
 #   apply FILE OP...  make the change and write the file
+#   hook-status FILE  print the command of the rotation hook, or nothing
+#   hook FILE install|remove plan|apply [ARG...]
+#                     add or remove the rotation hook; ARG is the command
+#                     that the hook runs, one word per argument
 # An OP is "reset:", "clear:", "add:<theme>", "remove:<theme>", "verb:<text>"
 # or "mode:<mode>". Exit codes: 0 changed, 10 no change, 11 refused, 2 error.
 PY_HELPER="$(cat <<'PY'
 import json
 import os
 import re
+import shlex
 import shutil
 import sys
 import tempfile
@@ -351,6 +389,87 @@ def write(path, data):
         raise
 
 
+HOOK_MARKER = 'manage_claude_spinner_verbs'
+
+
+def is_rotation_hook(handler):
+    return (isinstance(handler, dict) and handler.get('type') == 'command'
+            and isinstance(handler.get('command'), str)
+            and HOOK_MARKER in handler['command']
+            and '--rotate' in handler['command'])
+
+
+def session_start_groups(data, path):
+    """Return the hooks object and its SessionStart list."""
+    hooks = data.get('hooks', {})
+    if not isinstance(hooks, dict):
+        fail(f'hooks in {path} is not a JSON object.')
+    groups = hooks.get('SessionStart', [])
+    if not isinstance(groups, list):
+        fail(f'hooks.SessionStart in {path} is not a list.')
+    return hooks, groups
+
+
+def rotation_commands(groups):
+    return [handler['command']
+            for group in groups if isinstance(group, dict)
+            and isinstance(group.get('hooks'), list)
+            for handler in group['hooks'] if is_rotation_hook(handler)]
+
+
+def hook_plan(path, action, argv):
+    """Return (new settings or None, exit code, summary lines)."""
+    data, _ = read_settings(path)
+    hooks, groups = session_start_groups(data, path)
+    found = rotation_commands(groups)
+    command = shlex.join(argv)
+
+    if action == 'install' and found == [command]:
+        return None, 10, ['The rotation hook is already in this file.']
+    if action == 'remove' and not found:
+        return None, 10, ['There is no rotation hook in this file.']
+
+    new_groups = []
+    placed = False
+    for group in groups:
+        if not isinstance(group, dict) or not isinstance(group.get('hooks'), list):
+            new_groups.append(group)
+            continue
+        handlers = []
+        for handler in group['hooks']:
+            if not is_rotation_hook(handler):
+                handlers.append(handler)
+            elif action == 'install' and not placed:
+                handler = dict(handler)
+                handler['command'] = command
+                handlers.append(handler)
+                placed = True
+        if handlers:
+            group = dict(group)
+            group['hooks'] = handlers
+            new_groups.append(group)
+
+    if action == 'install':
+        if not placed:
+            new_groups.append({'hooks': [{'type': 'command', 'command': command}]})
+        verb = 'Update' if found else 'Add'
+        lines = [f'{verb} the SessionStart hook: {command}']
+    else:
+        lines = ['Remove the SessionStart hook that rotates the theme.']
+
+    new_hooks = dict(hooks)
+    if new_groups:
+        new_hooks['SessionStart'] = new_groups
+    else:
+        new_hooks.pop('SessionStart', None)
+    new = dict(data)
+    if new_hooks:
+        new['hooks'] = new_hooks
+    else:
+        new.pop('hooks', None)
+    return new, 0, lines
+
+
 def parse_ops(args):
     ops = []
     for arg in args:
@@ -388,6 +507,25 @@ def main():
         for verb in verbs:
             print(verb)
         return 0
+
+    if command == 'hook-status':
+        data, _ = read_settings(args[0])
+        hooks = data.get('hooks')
+        groups = hooks.get('SessionStart') if isinstance(hooks, dict) else None
+        if isinstance(groups, list):
+            for found in rotation_commands(groups):
+                print(found)
+        return 0
+
+    if command == 'hook':
+        path, action, step = args[0], args[1], args[2]
+        new, code, lines = hook_plan(path, action, args[3:])
+        if step == 'plan':
+            for line in lines:
+                print(line)
+        elif code == 0:
+            write(path, new)
+        return code
 
     if command in ('plan', 'apply'):
         new, code, lines = plan(args[0], parse_ops(args[1:]))
@@ -485,6 +623,9 @@ print_state() {
   else
     info "Verbs    : not set in this file"
   fi
+  if [[ "$SCOPE" == "user" && -n "$(rotation_hook)" ]]; then
+    info "Rotation : on (a SessionStart hook sets the theme of the day)"
+  fi
   warn_other_scopes
 }
 
@@ -551,6 +692,10 @@ run_change() {
     info "$line"
   done <<< "$out"
 
+  if ! $SKIP_ROTATION_WARNING && [[ "$SCOPE" == "user" && -n "$(rotation_hook)" ]]; then
+    warn "The daily rotation is on. The next session start sets the theme of the day again."
+  fi
+
   if $DRY_RUN; then
     $BACKUP && [[ -f "$SETTINGS_FILE" ]] && info "Would back up: $(tilde "$SETTINGS_FILE")"
     info "Dry run: nothing written."
@@ -571,6 +716,112 @@ run_change() {
   info "Start a new session if the spinner does not change."
 }
 
+# ── Rotation ──────────────────────────────────────────────────────────────────
+# Print the command of the rotation hook in the user settings file, or nothing.
+rotation_hook() {
+  local f
+  f="$(settings_file_for user)"
+  [[ -f "$f" ]] || return 0
+  py hook-status "$f" 2>/dev/null || true
+}
+
+# Fill ROTATION_PATHS from --themes, or with all themes.
+load_rotation() {
+  local name f
+  local -a names=()
+  ROTATION_PATHS=()
+  if [[ -n "$ROTATION_THEMES" ]]; then
+    IFS=',' read -r -a names <<< "$ROTATION_THEMES"
+    for name in ${names[@]+"${names[@]}"}; do
+      [[ -n "$name" ]] || continue
+      [[ -f "${THEMES_DIR}/${name}.json" ]] \
+        || error "No such theme: ${name}. Run with --list to see the themes."
+      ROTATION_PATHS+=("${THEMES_DIR}/${name}.json")
+    done
+  else
+    for f in "$THEMES_DIR"/*.json; do
+      [[ -f "$f" ]] && ROTATION_PATHS+=("$f")
+    done
+  fi
+  (( ${#ROTATION_PATHS[@]} > 0 )) || error "No themes to rotate."
+}
+
+# Print the file of the theme of the day.
+theme_of_day() {
+  local day count
+  day=$(( $(date -u +%s) / 86400 ))
+  count=${#ROTATION_PATHS[@]}
+  echo "${ROTATION_PATHS[$(( ((day - ROTATION_EPOCH_DAY) % count + count) % count ))]}"
+}
+
+# Set the theme of the day without output. The SessionStart hook runs this,
+# and Claude Code adds the stdout of that hook to the context of Claude.
+rotate() {
+  local rc
+  load_rotation
+  py apply "$SETTINGS_FILE" "clear:" "add:$(theme_of_day)" && rc=0 || rc=$?
+  (( rc == 0 || rc == 10 )) || exit 1
+  exit 0
+}
+
+# Show the hook change, ask, then write it. Return 0 when the hook is in the
+# wanted state, 1 when there was no input, 3 on error, and 4 when declined.
+hook_change() {
+  local action="$1" out rc
+  shift
+  out="$(py hook "$SETTINGS_FILE" "$action" plan "$@")" && rc=0 || rc=$?
+  case "$rc" in
+    0)  ;;
+    10) info "$out"; return 0 ;;
+    *)  return 3 ;;
+  esac
+  info "$out"
+
+  if $DRY_RUN; then
+    info "Dry run: nothing written."
+    return 0
+  fi
+
+  confirm "Write this change to $(tilde "$SETTINGS_FILE")?" && rc=0 || rc=$?
+  case "$rc" in
+    0) ;;
+    1) warn "Nothing written."; return 4 ;;
+    *) warn "Aborted (no input). Pass --yes to run non-interactively."; return 1 ;;
+  esac
+
+  backup_settings
+  py hook "$SETTINGS_FILE" "$action" apply "$@" || return 3
+  success "Saved: $(tilde "$SETTINGS_FILE")"
+}
+
+# Add the rotation hook, then set the theme of the day.
+install_rotation() {
+  local rc
+  local -a argv
+  load_rotation
+  argv=("$(resolve_path "$0")" --rotate --claude "$CLAUDE_HOME")
+  [[ -n "$ROTATION_THEMES" ]] && argv+=(--themes "$ROTATION_THEMES")
+  hook_change install "${argv[@]}" && rc=0 || rc=$?
+  (( rc == 0 )) || return "$rc"
+  echo ""
+  info "Theme of the day: $(basename "$(theme_of_day)" .json)"
+  SKIP_ROTATION_WARNING=true
+  run_change "clear:" "add:$(theme_of_day)" && rc=0 || rc=$?
+  SKIP_ROTATION_WARNING=false
+  return "$rc"
+}
+
+# Remove the rotation hook. The verbs stay.
+remove_rotation() {
+  local rc had
+  had="$(rotation_hook)"
+  hook_change remove && rc=0 || rc=$?
+  (( rc == 0 )) || return "$rc"
+  if [[ -n "$had" ]] && ! $DRY_RUN; then
+    info "The current verbs stay. Run with --reset to remove them."
+  fi
+}
+
 print_banner() {
   echo ""
   echo -e "${BOLD}╔══════════════════════════════════════════╗${RESET_COLOR}"
@@ -585,10 +836,38 @@ print_banner() {
 # Run a change from the menu. Exit when there is no input, and go back to the
 # menu when the change cannot be made.
 menu_change() {
+  menu_run run_change "$@"
+}
+
+# Run command $1 with the other arguments from the menu. Exit when there is
+# no input, and go back to the menu for all other results.
+menu_run() {
   local rc
-  run_change "$@" && rc=0 || rc=$?
+  "$@" && rc=0 || rc=$?
   (( rc == 1 )) && exit 1
   return 0
+}
+
+# Turn the daily rotation on or off from the menu.
+menu_rotation() {
+  local answer p names=""
+  if [[ "$SCOPE" != "user" ]]; then
+    warn "The rotation works with the user settings file only."
+    return 0
+  fi
+  if [[ -n "$(rotation_hook)" ]]; then
+    menu_run remove_rotation
+    return 0
+  fi
+  read -r -p "Rotate all themes? [Y/n] " answer || { echo ""; exit 0; }
+  if [[ "$answer" =~ ^[Nn]$ ]]; then
+    pick_themes "Themes to rotate" || return 0
+    for p in "${PICKED[@]}"; do
+      names="${names:+${names},}$(basename "$p" .json)"
+    done
+  fi
+  ROTATION_THEMES="$names"
+  menu_run install_rotation
 }
 
 pick_scope() {
@@ -665,6 +944,11 @@ run_menu() {
     echo "  5) Switch the mode (replace / append)"
     echo "  6) Show the current verbs"
     echo "  7) Remove the spinner verbs from this file"
+    if [[ "$SCOPE" == "user" && -n "$(rotation_hook)" ]]; then
+      echo "  8) Turn off the daily theme rotation"
+    else
+      echo "  8) Rotate the theme each day"
+    fi
     echo "  q) Quit"
     read -r -p "Choose: " choice || { echo ""; exit 0; }
     echo ""
@@ -702,6 +986,7 @@ run_menu() {
         ;;
       6) show_verbs ;;
       7) menu_change "reset:" ;;
+      8) menu_rotation ;;
       q|Q) exit 0 ;;
       *) warn "Unknown choice: ${choice}" ;;
     esac
@@ -712,7 +997,7 @@ run_menu() {
 # ── Argument parsing ──────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --use|--add|--remove|--verb|--mode|--scope|--claude|--project)
+    --use|--add|--remove|--verb|--mode|--scope|--claude|--project|--themes)
       [[ $# -ge 2 ]] || error "Missing value for $1."
       case "$1" in
         --use)     USE+=("$2") ;;
@@ -722,6 +1007,7 @@ while [[ $# -gt 0 ]]; do
         --mode)    MODE="$2" ;;
         --scope)   SCOPE="$2" ;;
         --claude)  CLAUDE_HOME="$2" ;;
+        --themes)  ROTATION_THEMES="$2" ;;
         *)         PROJECT_DIR="$2" ;;
       esac
       shift 2
@@ -729,6 +1015,9 @@ while [[ $# -gt 0 ]]; do
     --reset)   RESET=true;      shift ;;
     --show)    SHOW=true;       shift ;;
     --list)    LIST=true;       shift ;;
+    --rotate)  ROTATE=true;     shift ;;
+    --install-rotation) INSTALL_ROTATION=true; shift ;;
+    --remove-rotation)  REMOVE_ROTATION=true;  shift ;;
     --backup)  BACKUP=true;     shift ;;
     --dry-run) DRY_RUN=true;    shift ;;
     --yes|-y)  ASSUME_YES=true; shift ;;
@@ -759,6 +1048,21 @@ if { $SHOW || $LIST; } && { $RESET || (( EDITS > 0 )); }; then
   error "--show and --list run on their own. Remove the action flags."
 fi
 
+ROTATION_ACTIONS=0
+$ROTATE           && ROTATION_ACTIONS=$(( ROTATION_ACTIONS + 1 ))
+$INSTALL_ROTATION && ROTATION_ACTIONS=$(( ROTATION_ACTIONS + 1 ))
+$REMOVE_ROTATION  && ROTATION_ACTIONS=$(( ROTATION_ACTIONS + 1 ))
+if (( ROTATION_ACTIONS > 1 )) \
+  || { (( ROTATION_ACTIONS > 0 )) && { $RESET || $SHOW || $LIST || (( EDITS > 0 )); }; }; then
+  error "--rotate, --install-rotation and --remove-rotation run on their own."
+fi
+if [[ -n "$ROTATION_THEMES" ]] && ! $ROTATE && ! $INSTALL_ROTATION; then
+  error "--themes works with --rotate and --install-rotation only."
+fi
+if (( ROTATION_ACTIONS > 0 )) && [[ "${SCOPE:-user}" != "user" ]]; then
+  error "The rotation works with the user scope only."
+fi
+
 if $LIST; then
   list_themes
   exit 0
@@ -774,8 +1078,32 @@ PROJECT_DIR="$(cd "$PROJECT_DIR" && pwd)"
 if [[ "${SCOPE:-user}" == "user" ]] || $BACKUP; then
   [[ -d "$CLAUDE_HOME" ]] || error "Claude home not found: ${CLAUDE_HOME}"
 fi
+# The rotation hook stores this path, so make it absolute.
+if [[ -d "$CLAUDE_HOME" ]]; then
+  CLAUDE_HOME="$(cd "$CLAUDE_HOME" && pwd)"
+fi
 
 # ── Run ───────────────────────────────────────────────────────────────────────
+if (( ROTATION_ACTIONS > 0 )); then
+  SCOPE=user
+  SETTINGS_FILE="$(settings_file_for user)"
+  $ROTATE && rotate
+
+  print_banner
+  print_state
+  echo ""
+  if $INSTALL_ROTATION; then
+    install_rotation && rc=0 || rc=$?
+  else
+    remove_rotation && rc=0 || rc=$?
+  fi
+  echo ""
+  case "$rc" in
+    0|4) exit 0 ;;
+    *)   exit 1 ;;
+  esac
+fi
+
 if $SHOW; then
   SCOPE="${SCOPE:-user}"
   SETTINGS_FILE="$(settings_file_for "$SCOPE")"

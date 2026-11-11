@@ -66,7 +66,7 @@ An interactive list of every project a Claude home knows about, to move a projec
 
 ### [`manage_claude_spinner_verbs.sh`](./claude/scripts/README.md#manage_claude_spinner_verbssh)
 
-Sets spinner verb themes in a Claude Code settings file from a menu or with flags: use a theme, stack themes, add your own phrases, switch the mode, or remove them.
+Sets spinner verb themes in a Claude Code settings file from a menu or with flags: use a theme, stack themes, add your own phrases, switch the mode, or remove them. A `SessionStart` hook can rotate the theme once a day.
 
 **[→ Claude scripts README](./claude/scripts/README.md)**
 

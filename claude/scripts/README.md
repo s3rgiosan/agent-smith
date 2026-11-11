@@ -250,6 +250,7 @@ The menu asks for a settings file, then loops:
 | `5` | Switch the mode between `replace` and `append` |
 | `6` | Show the current verbs |
 | `7` | Remove `spinnerVerbs` from the file |
+| `8` | Turn the daily theme rotation on or off (user settings file only) |
 | `q` | Quit |
 
 Every change prints the before and after counts and asks for confirmation before it writes.
@@ -269,6 +270,12 @@ Every change prints the before and after counts and asks for confirmation before
 
 # Remove the spinner verbs from ~/.claude/settings.json
 ./manage_claude_spinner_verbs.sh --reset
+
+# Rotate all themes, one each day
+./manage_claude_spinner_verbs.sh --install-rotation
+
+# Rotate only two themes
+./manage_claude_spinner_verbs.sh --install-rotation --themes portuguese,portuguese-football
 ```
 
 Flags:
@@ -283,6 +290,10 @@ Flags:
 | `--reset` | Remove `spinnerVerbs` from the settings file |
 | `--show` | Print the current verbs |
 | `--list` | Print the available themes |
+| `--install-rotation` | Add a `SessionStart` hook that runs `--rotate`, then set the theme of the day (user scope only) |
+| `--remove-rotation` | Remove that hook; the current verbs stay |
+| `--rotate` | Set the theme of the day; the hook runs this, and it prints nothing unless an error occurs |
+| `--themes` | Comma-separated themes for the rotation (default: all themes) |
 | `--scope` | `user` (default): `<claude_home>/settings.json`; `project`: `<dir>/.claude/settings.json`; `local`: `<dir>/.claude/settings.local.json` |
 | `--claude` | Path to the Claude home for the `user` scope (default: `$CLAUDE_CONFIG_DIR` or `~/.claude`) |
 | `--project` | Project directory for the `project` and `local` scopes (default: the current directory) |
@@ -298,6 +309,13 @@ Behavior notes:
 - Other keys in the settings file are kept. The file is written in one step, with its indent and file mode kept; a symlinked settings file stays a symlink.
 - A settings file that is not valid JSON is left alone. A `spinnerVerbs` with an unexpected shape can only be removed (`--reset`).
 - The script warns when another scope's file also sets `spinnerVerbs`.
+
+Daily rotation:
+
+- `--install-rotation` adds a `SessionStart` hook to `<claude_home>/settings.json`. The hook runs this script from the clone with `--rotate`, so moving or deleting the clone breaks it; run `--install-rotation` again from the new place.
+- Each UTC day shows the next theme, in alphabetical order or in the `--themes` order. Without `--themes`, a new theme file joins the rotation after a `git pull`, and the order shifts.
+- The rotation keeps the current mode, and it writes nothing when the theme of the day is already set.
+- Manual changes in the user settings file last until the next session start, when the hook sets the theme of the day again.
 - Requires `python3`. Works with bash 3.2 (macOS).
 
 ---
