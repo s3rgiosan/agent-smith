@@ -360,7 +360,6 @@ def write(path, data):
     _, text = read_settings(path)
     real = os.path.realpath(path)
     folder = os.path.dirname(real)
-    os.makedirs(folder, exist_ok=True)
 
     indent = 2
     match = re.search(r'^([ \t]+)"', text, re.M)
@@ -369,9 +368,11 @@ def write(path, data):
         indent = '\t' if '\t' in whitespace else len(whitespace)
     output = json.dumps(data, indent=indent, ensure_ascii=False) + '\n'
 
-    fd, tmp = tempfile.mkstemp(dir=folder, prefix='.' + os.path.basename(real) + '.',
-                               suffix='.tmp')
+    tmp = None
     try:
+        os.makedirs(folder, exist_ok=True)
+        fd, tmp = tempfile.mkstemp(dir=folder, prefix='.' + os.path.basename(real) + '.',
+                                   suffix='.tmp')
         with os.fdopen(fd, 'w', encoding='utf-8') as handle:
             handle.write(output)
         if os.path.exists(real):
@@ -381,12 +382,15 @@ def write(path, data):
             os.umask(umask)
             os.chmod(tmp, 0o666 & ~umask)
         os.replace(tmp, real)
-    except BaseException:
-        try:
-            os.unlink(tmp)
-        except OSError:
-            pass
-        raise
+        tmp = None
+    except OSError as exc:
+        fail(f'Cannot write {path}: {exc.strerror or exc}')
+    finally:
+        if tmp:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
 
 
 HOOK_MARKER = 'manage_claude_spinner_verbs'
@@ -656,13 +660,17 @@ show_verbs() {
 }
 
 # Back up the settings file when --backup is set and the file exists.
+# Return 1 when the backup fails. The callers run this function in an
+# "&& ||" list, where bash ignores set -e, so each step is checked here.
 backup_settings() {
   $BACKUP || return 0
   [[ -f "$SETTINGS_FILE" ]] || return 0
   local dir="${CLAUDE_HOME}/backups/spinner-verbs" bak
   bak="$(unique_path "${dir}/${SCOPE}-$(basename "$SETTINGS_FILE").$(date +%Y%m%d%H%M%S)")"
-  mkdir -p "$dir"
-  cp -p "$SETTINGS_FILE" "$bak"
+  if ! mkdir -p "$dir" || ! cp -p "$SETTINGS_FILE" "$bak"; then
+    echo -e "${RED}[ERROR]${RESET_COLOR} Cannot write the backup $(tilde "$bak"). Nothing written." >&2
+    return 1
+  fi
   info "Backup written: $(tilde "$bak")"
 }
 
@@ -709,7 +717,7 @@ run_change() {
     *) warn "Aborted (no input). Pass --yes to run non-interactively."; return 1 ;;
   esac
 
-  backup_settings
+  backup_settings || return 3
   py apply "$SETTINGS_FILE" "$@" && rc=0 || rc=$?
   (( rc == 0 )) || return 3
   success "Saved: $(tilde "$SETTINGS_FILE")"
@@ -789,7 +797,7 @@ hook_change() {
     *) warn "Aborted (no input). Pass --yes to run non-interactively."; return 1 ;;
   esac
 
-  backup_settings
+  backup_settings || return 3
   py hook "$SETTINGS_FILE" "$action" apply "$@" || return 3
   success "Saved: $(tilde "$SETTINGS_FILE")"
 }
